@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Translation Engine — UI Prototype</title>
+  <meta name="description" content="Clickable HTML/CSS prototype of the English→Amharic translation & self-improving QA app." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Ethiopic:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- ============ Left rail ============ -->
+    <aside class="rail">
+      <div class="brand">
+        <div class="brand-mark">አ</div>
+        <div>
+          <div class="brand-name">Translation Engine</div>
+          <div class="brand-sub">EN → አማርኛ · self-improving QA</div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" style="width:100%" data-route="new">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
+        New article
+      </button>
+
+      <div class="nav-group">
+        <div class="nav-label">Workspace</div>
+        <nav id="nav-main"></nav>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-label">Admin</div>
+        <nav id="nav-admin"></nav>
+      </div>
+
+      <div class="rail-foot">
+        <label class="switch" style="padding:7px 8px;width:100%">
+          <input type="checkbox" id="theme-toggle" />
+          <span class="track"></span>
+          <span class="small dim">Dark theme</span>
+        </label>
+        <div class="divider" style="margin:8px 0"></div>
+        <button class="user-chip" id="user-chip">
+          <span class="avatar" id="user-initials">DK</span>
+          <span style="min-width:0">
+            <span class="user-mail" id="user-mail">dave@example.com</span>
+            <span class="user-role" id="user-role">Admin · Cloudflare Access</span>
+          </span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ============ Main ============ -->
+    <div class="main">
+      <header class="topbar">
+        <div class="crumbs" id="crumbs"></div>
+        <div class="topbar-actions">
+          <button class="kbd-hint" id="open-palette">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="width:13px;height:13px"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2 14 14" stroke-linecap="round"/></svg>
+            Search or jump to
+            <kbd>⌘K</kbd>
+          </button>
+        </div>
+      </header>
+      <div class="scroll" id="scroll"><div id="view"></div></div>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+  <div id="overlay"></div>
+
+  <script src="./data.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
