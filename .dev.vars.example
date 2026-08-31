@@ -1,0 +1,6 @@
+GEMINI_API_KEY=
+
+# Local dev only. When ACCESS_TEAM_DOMAIN/ACCESS_AUD are unset (the default
+# locally), requests are treated as authenticated with this email instead of
+# a real Cloudflare Access JWT. Never set this outside .dev.vars.
+DEV_BYPASS_EMAIL=yegnatop10@gmail.com

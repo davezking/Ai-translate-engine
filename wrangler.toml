@@ -1,0 +1,37 @@
+name = "ai-translate-engine"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "dist"
+
+# --- D1 ---------------------------------------------------------------
+# Created with: wrangler d1 create ai-translate-engine-db
+# Fill in database_id below once created; binding name is env.DB.
+[[d1_databases]]
+binding = "DB"
+database_name = "ai-translate-engine-db"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+# --- Vectorize ----------------------------------------------------------
+# Created with: wrangler vectorize create ai-translate-engine-corrections --dimensions=768 --metric=cosine
+# 768 = output dimension of @cf/baai/bge-base-en-v1.5 (functions/lib/env.ts
+# EMBEDDING_MODEL/EMBEDDING_DIMENSIONS) — mismatch fails loudly, never silently.
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "ai-translate-engine-corrections"
+
+# --- Workers AI -----------------------------------------------------------
+[ai]
+binding = "AI"
+
+# --- Cloudflare Access -----------------------------------------------------
+# Team domain and AUD tag of the Access application fronting this app.
+# Leave unset locally (functions/lib/auth.ts then falls back to the
+# DEV_BYPASS_EMAIL dev var). Both are REQUIRED before deploying anywhere
+# real — set them in the Pages project's environment variables (or uncomment
+# below), never leave them unset outside local dev.
+# [vars]
+# ACCESS_TEAM_DOMAIN = "REPLACE_WITH_TEAM.cloudflareaccess.com"
+# ACCESS_AUD = "REPLACE_WITH_ACCESS_APPLICATION_AUD_TAG"
+
+# --- Secrets (set via `wrangler secret put`, never committed) -------------
+# GEMINI_API_KEY
