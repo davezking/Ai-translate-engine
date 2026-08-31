@@ -49,6 +49,8 @@ export interface ChunkRow {
   english_text: string;
   amharic_text: string | null;
   status: string;
+  /** Hash of english_text as of the last successful translation; NULL if never translated. */
+  english_hash: string | null;
 }
 
 export interface CorrectionRow {
