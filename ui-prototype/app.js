@@ -46,7 +46,8 @@ const I = {
   merge:   'M4 3v4c0 2 1.5 3 3 3h5M12 10l-2-2M12 10l-2 2',
   split:   'M3 8h4m0 0 3-3m-3 3 3 3M9.5 8H13',
   lock:    'M4.5 7V5.5a3.5 3.5 0 0 1 7 0V7M3.5 7h9v6h-9z',
-  history: 'M2.5 8a5.5 5.5 0 1 0 1.7-4M2.5 3v3.5H6M8 5.5V8l2 1.5'
+  history: 'M2.5 8a5.5 5.5 0 1 0 1.7-4M2.5 3v3.5H6M8 5.5V8l2 1.5',
+  undo:    'M6 3.4 2.6 6.8 6 10.2M2.6 6.8h6.6a3.4 3.4 0 0 1 0 6.8H6.6'
 };
 const icon = (name, cls = '') =>
   `<svg class="${cls}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
@@ -513,63 +514,187 @@ ROUTES.a = (id, stage = 'split') => {
     [stage] || stageSplit)(article);
 };
 
-/* --- Stage 1: split ------------------------------------------------------ */
+/* --- Stage 1: split ------------------------------------------------------
+   Chunks are a *derived* view of paragraphs + boundaries. The operator edits
+   boundaries only: merging drops one, splitting adds one. A break can only
+   land between paragraphs, which is the same constraint the split prompt puts
+   on Gemini, so the UI cannot express a cut the pipeline could not make.
+   ------------------------------------------------------------------------ */
 function stageSplit(article) {
-  const chunks = DB.chunks[article.id] || [];
-  const body = `
-    <div class="banner banner-info" style="margin-bottom:14px">
-      ${icon('info')}
-      <span>Gemini proposed these boundaries from the <b>split</b> prompt (v${DB.prompts.split.current}).
-        Adjust them before translating — merging or splitting here is free, re-translating is not.</span>
-    </div>
+  const paras = DB.paragraphs[article.id] || [];
+  const T = DB.chunkTarget;
+  const saved = DB.boundaries[article.id] || [0];
 
-    <div class="section-head">
-      <span class="section-title">${chunks.length} chunks</span>
-      <span class="small muted">${chunks.reduce((s, c) => s + c.words, 0)} words total ·
-        avg ${Math.round(chunks.reduce((s, c) => s + c.words, 0) / chunks.length)} per chunk</span>
-      <div class="actions">
-        <button class="btn btn-sm" id="reset">${icon('retry')} Re-run split</button>
-        <button class="btn btn-sm btn-primary" id="next">Save boundaries &amp; continue</button>
-      </div>
-    </div>
+  let bounds = [...saved];
+  const past = [], future = [];
 
-    <div id="chunklist">
-      ${chunks.map((c, i) => `
-        ${i ? `<div class="boundary"><button data-merge="${i}">${icon('merge')} merge with previous</button></div>` : ''}
-        <div class="chunk">
-          <div class="chunk-head">
-            <span class="chunk-ord">${c.ord}</span>
-            <span class="chunk-words">${c.words} words</span>
-            ${c.words > 210 ? '<span class="pill pill-warn">long</span>' : ''}
-            <div class="actions">
-              <button class="btn btn-sm btn-ghost" data-split="${i}">${icon('split')} split here</button>
+  const same = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+  const commit = next => {                 // every edit goes through here
+    past.push([...bounds]); future.length = 0;
+    bounds = next; render();
+  };
+  const undo = () => { if (past.length) { future.push([...bounds]); bounds = past.pop(); render(); } };
+  const redo = () => { if (future.length) { past.push([...bounds]); bounds = future.pop(); render(); } };
+
+  /* Size verdict. "Short" only counts as a note when there is something to
+     merge with — a single chunk holding the whole article cannot be longer. */
+  const sizeOf = (c, count) => {
+    if (c.words > T.hard) return { cls: 'pill-danger', label: `${c.words} words · over the ${T.hard} cap`, act: 'split' };
+    if (c.words > T.max)  return { cls: 'pill-warn',   label: `${c.words} words · long`, act: 'split' };
+    if (c.words < T.min && count > 1) return { cls: 'pill-info', label: `${c.words} words · short`, act: 'merge' };
+    return { cls: '', label: `${c.words} words`, act: null };
+  };
+
+  workspaceShell(article, 'split', '<div id="split-root"></div>');
+
+  function render() {
+    const chunks = DB.buildChunks(article.id, bounds);
+    const dirty = !same(bounds, saved);
+    const keeps = chunks.filter(c => c.amharic_text).length;
+    const needs = chunks.length - keeps;
+    const savedKeeps = DB.buildChunks(article.id, saved).filter(c => c.amharic_text).length;
+    const losing = savedKeeps - keeps;
+
+    $('#split-root').innerHTML = `
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-pad row wrap" style="gap:14px">
+          <div>
+            <div class="stat-label">Chunks</div>
+            <div class="row" style="gap:6px;margin-top:3px">
+              <span style="font-size:19px;font-weight:640;font-variant-numeric:tabular-nums">${chunks.length}</span>
+              <span class="small muted">${article.words} words total</span>
             </div>
           </div>
-          <div class="chunk-body">${esc(c.english_text)}</div>
-        </div>`).join('')}
-    </div>
+          <div style="border-left:1px solid var(--border);padding-left:14px">
+            <div class="stat-label">Target per chunk</div>
+            <div class="small dim" style="margin-top:5px">${T.min}–${T.max} words
+              <span class="muted">· hard cap ${T.hard}</span></div>
+          </div>
+          <div style="border-left:1px solid var(--border);padding-left:14px">
+            <div class="stat-label">Translations</div>
+            <div class="small dim" style="margin-top:5px">
+              ${keeps} kept · ${needs} to translate</div>
+          </div>
+          <span class="spacer"></span>
+          <div class="row" style="gap:6px">
+            <button class="btn btn-sm btn-icon" id="undo" title="Undo (⌘Z)" aria-label="Undo"
+              ${past.length ? '' : 'disabled'}>${icon('undo')}</button>
+            <button class="btn btn-sm btn-icon" id="redo" title="Redo (⌘⇧Z)" aria-label="Redo"
+              ${future.length ? '' : 'disabled'}><span style="display:flex;transform:scaleX(-1)">${icon('undo')}</span></button>
+            <button class="btn btn-sm" id="reset" ${same(bounds, DB.proposed[article.id]) ? 'disabled' : ''}>
+              ${icon('retry')} AI proposal</button>
+            <button class="btn btn-sm btn-primary" id="save">
+              ${dirty ? 'Save boundaries &amp; continue' : 'Continue to translate'}</button>
+          </div>
+        </div>
+      </div>
 
-    <p class="hint" style="margin-top:14px">
-      Saving writes to <span class="mono">PUT /api/articles/:id/chunks</span>. Chunk text is hashed, so a chunk
-      you don’t touch is never re-translated.
-    </p>`;
+      ${dirty && losing > 0 ? `
+        <div class="banner banner-warn" style="margin-bottom:14px">
+          ${icon('warn')}
+          <span><b>${losing} chunk${losing === 1 ? '' : 's'} will need re-translating.</b>
+            Changing a boundary changes a chunk’s source text, so its existing Amharic no longer
+            applies. Chunks you didn’t touch keep theirs.</span>
+        </div>` : `
+        <div class="banner banner-info" style="margin-bottom:14px">
+          ${icon('info')}
+          <span>Gemini proposed these boundaries from the <b>split</b> prompt
+            (v${DB.prompts.split.current}). Breaks can only fall between paragraphs — hover a gap to
+            split, or merge a chunk into the one above it.</span>
+        </div>`}
 
-  workspaceShell(article, 'split', body);
+      <div id="chunks">${chunks.map((c, i) => {
+        const size = sizeOf(c, chunks.length);
+        const mergedWords = i ? c.words + chunks[i - 1].words : 0;
+        const tooBig = mergedWords > T.hard;
+        return `
+        ${i ? `
+          <div class="boundary">
+            <button data-merge="${c.start}" ${tooBig ? 'disabled' : ''}
+              title="${tooBig
+                ? `Merging would make a ${mergedWords}-word chunk, over the ${T.hard}-word cap`
+                : `Merge into chunk ${i} — ${mergedWords} words`}">
+              ${icon('merge')} merge with chunk ${i}
+              <span class="b-count">${mergedWords}w</span>
+            </button>
+          </div>` : ''}
+        <div class="chunk${c.status === 'failed' ? ' failed' : ''}">
+          <div class="chunk-head">
+            <span class="chunk-ord">${c.ord}</span>
+            <span class="pill ${size.cls} ${size.cls ? '' : 'plain'}">${size.label}</span>
+            <span class="chunk-words">${c.paragraphs.length} paragraph${c.paragraphs.length === 1 ? '' : 's'}</span>
+            <div class="actions">
+              ${c.amharic_text
+                ? '<span class="pill pill-ok">translation kept</span>'
+                : c.status === 'failed'
+                  ? '<span class="pill pill-danger">failed — will retry</span>'
+                  : '<span class="pill">needs translation</span>'}
+            </div>
+          </div>
+          <div class="chunk-body" style="padding:0">
+            ${c.paragraphs.map((p, j) => `
+              ${j ? `
+                <div class="para-split">
+                  <button data-split="${c.start + j}" title="Break the chunk here">
+                    ${icon('split')} split here
+                  </button>
+                </div>` : ''}
+              <p class="para">${esc(p.en)}</p>`).join('')}
+          </div>
+        </div>`;
+      }).join('')}</div>
 
-  $$('[data-merge]').forEach(b => b.onclick = () => toast('Boundary merged — chunk hashes recomputed.', 'info'));
-  $$('[data-split]').forEach(b => b.onclick = () => toast('Split point added. Pick the paragraph to break at.', 'info'));
-  $('#reset').onclick = () => confirmDialog({
-    title: 'Re-run the AI split?',
-    body: 'Any boundary you adjusted by hand will be replaced by a fresh proposal. Chunks already translated keep their Amharic text if their English is unchanged.',
-    confirm: 'Re-run split',
-    onConfirm: () => toast('Split re-run queued.', 'info')
-  });
-  $('#next').onclick = () => { location.hash = `#/a/${article.id}/translate`; };
+      <p class="hint" style="margin-top:14px">
+        Saving writes the paragraph runs to <span class="mono">PUT /api/articles/:id/chunks</span>.
+        A chunk whose source text is unchanged keeps its Amharic and is never re-translated.
+      </p>`;
+
+    $('#undo').onclick = undo;
+    $('#redo').onclick = redo;
+
+    $$('[data-merge]').forEach(b => b.onclick = () => {
+      const at = +b.dataset.merge;
+      commit(bounds.filter(x => x !== at));
+    });
+    $$('[data-split]').forEach(b => b.onclick = () => {
+      const at = +b.dataset.split;
+      commit([...bounds, at].sort((x, y) => x - y));
+    });
+
+    $('#reset').onclick = () => confirmDialog({
+      title: 'Go back to the AI proposal?',
+      body: 'Your boundary edits are discarded and the split Gemini proposed is restored. Chunks that end up unchanged keep their translations.',
+      confirm: 'Restore proposal',
+      onConfirm: () => commit([...DB.proposed[article.id]])
+    });
+
+    $('#save').onclick = () => {
+      if (!dirty) return void (location.hash = `#/a/${article.id}/translate`);
+      // API: PUT /api/articles/:id/chunks
+      DB.boundaries[article.id] = [...bounds];
+      article.chunks = bounds.length;
+      toast(needs
+        ? `Boundaries saved. ${keeps} chunk${keeps === 1 ? '' : 's'} kept their translation, ${needs} to translate.`
+        : 'Boundaries saved. Every chunk kept its translation.');
+      location.hash = `#/a/${article.id}/translate`;
+    };
+  }
+
+  // Undo/redo while this stage is on screen.
+  const keys = e => {
+    if (!$('#split-root')) return document.removeEventListener('keydown', keys);
+    if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return;
+    e.preventDefault();
+    e.shiftKey ? redo() : undo();
+  };
+  document.addEventListener('keydown', keys);
+
+  render();
 }
 
 /* --- Stage 2: per-chunk translate ---------------------------------------- */
 function stageTranslate(article) {
-  const chunks = DB.chunks[article.id] || [];
+  const chunks = DB.buildChunks(article.id);
   const body = `
     <div class="card" style="margin-bottom:14px">
       <div class="card-pad row">
@@ -603,7 +728,7 @@ function stageTranslate(article) {
 
   workspaceShell(article, 'translate', body);
 
-  const state = chunks.map(c => ({ ...c }));
+  let state = chunks.map(c => ({ ...c }));
 
   const draw = () => {
     const done = state.filter(c => c.status === 'done').length;
@@ -654,8 +779,12 @@ function stageTranslate(article) {
     c.status = 'translating'; c.error = null; draw();
     // API: POST /api/articles/:id/chunks/:ord/translate
     await wait(900 + Math.random() * 700);
+    // Stored against the chunk's identity, so it survives everything except a
+    // boundary change to this chunk.
+    DB.translations[c.key] = DB.translateChunk(c);
+    delete DB.chunkState[c.key];
+    c.amharic_text = DB.translations[c.key];
     c.status = 'done';
-    c.amharic_text = c.amharic_text || SAMPLE_AMHARIC[c.ord] || SAMPLE_AMHARIC.fallback;
     draw();
     if (state.every(x => x.status === 'done')) {
       article.status = 'translated';
@@ -675,11 +804,6 @@ function stageTranslate(article) {
   draw();
 }
 
-const SAMPLE_AMHARIC = {
-  3: 'የሎጂስቲክስ ሥርዓቱ አሁንም እጅግ ደካማው ማነቆ ሆኖ ቀጥሏል። ኮንቴነሮች በደረቅ ወደብ ለቀናት ተሰልፈው ይቆያሉ፤ ላኪዎችም እንደሚሉት የአንድ ጭነት መዘግየት በጠቅላላው ምርት ላይ የሚገኘውን ትርፍ ሙሉ በሙሉ ሊያጠፋ ይችላል። ባለሥልጣኑ ለተመዘገቡ ላኪዎች ዋስትና ያለው ተራ የሚሰጥ የቅድሚያ ምዝገባ ሥርዓት እንደሚዘረጋ ቢያስታውቅም፣ የሚጀመርበት ቀን እስካሁን አልተገለጸም። በሌላ በኩል የተረጋገጡ የቡና ደረጃ ሰጪ ባለሙያዎች እጥረት በመኖሩ ናሙናዎች አንዳንዴ ለአንድ ሳምንት ሳይቀመሱ ይቆያሉ፤ የውጭ ገዢዎችም የኢትዮጵያ ሻጮች እስካሁን ሊሰጡ የማይችሉትን የጊዜ ገደብ ዋስትና በተደጋጋሚ እየጠየቁ ነው።',
-  4: 'ቀጣዩ ምዕራፍ የሚወሰነው በዋጋ ሳይሆን በሰነድ ሥራ ነው። የምዝገባው ዘመቻ ከቀጣዩ ምርት ወቅት በፊት አዲሶቹን ወረዳዎች የሚደርስ ከሆነ፣ አሁን በሁለት ዞኖች ብቻ የተከማቸው ተጨማሪ ጥቅም ሊስፋፋ ይችላል። ካልተሳካ ግን ሪከርዱ ለዘርፉ የመዋቅር ለውጥ ሳይሆን ለጥቂት አምራቾች ጥሩ ዓመት ሆኖ ብቻ ይመዘገባል።',
-  fallback: 'የተተረጎመ የአማርኛ ጽሑፍ በዚህ ቦታ ይታያል።'
-};
 
 /* --- Stage 3: QA pass ---------------------------------------------------- */
 function stageQA(article) {
@@ -789,12 +913,12 @@ function stageQA(article) {
 }
 
 /* --- Stage 4: side-by-side reviewer editor ------------------------------- */
-const AMHARIC_DRAFT = () => (DB.chunks.art_9fa21c || [])
-  .map(c => c.amharic_text || SAMPLE_AMHARIC[c.ord] || '')
-  .filter(Boolean).join('\n\n');
+const AMHARIC_DRAFT = (id = 'art_9fa21c') => DB.buildChunks(id)
+  .map(c => c.amharic_text || DB.translateChunk(c))
+  .join('\n\n');
 
 function stageReview(article) {
-  const chunks = DB.chunks[article.id] || [];
+  const chunks = DB.buildChunks(article.id);
   const bufKey = `te-draft-${article.id}`;
   let buffered = null;
   try { buffered = JSON.parse(localStorage.getItem(bufKey) || 'null'); } catch {}
@@ -836,7 +960,7 @@ function stageReview(article) {
             ${chunks.map((c, i) => `
               <div class="seg-mark" data-seg="${i}" style="margin-bottom:18px">
                 <div class="muted" style="font-size:10.5px;font-weight:600;letter-spacing:.05em;margin-bottom:5px">CHUNK ${c.ord}</div>
-                <p>${esc(c.english_text)}</p>
+                ${c.paragraphs.map(p => `<p>${esc(p.en)}</p>`).join('')}
               </div>`).join('')}
           </div>
         </div>

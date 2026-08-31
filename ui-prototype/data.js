@@ -80,32 +80,70 @@ const DB = {
     }
   ],
 
-  /* --- chunks for the focus article -------------------------------------- */
-  chunks: {
+  /* --- paragraphs: the atoms a chunk is built from -------------------------
+     Chunks are not stored as text. A chunk is a contiguous run of paragraphs,
+     defined by `boundaries` (the paragraph index each chunk starts at). This
+     mirrors the split prompt's rule that a break may only fall on a paragraph
+     boundary — never mid-sentence, mid-quote or mid-list.
+     `am` is the Amharic a translate call would return for that paragraph; what
+     has *actually* been translated lives in `translations`, keyed by chunk
+     identity. ------------------------------------------------------------- */
+  paragraphs: {
     art_9fa21c: [
-      {
-        ord: 1, status: 'done', words: 196,
-        english_text: 'Ethiopia’s coffee exports reached a record 1.4 billion dollars in the last fiscal year, the Coffee and Tea Authority said on Tuesday, a figure that puts the sector well ahead of the target set at the start of the period. Officials attributed the rise to a combination of higher global prices, tighter controls on contraband movement across the western border, and a push to register smallholder washing stations that had previously sold into informal channels. The authority said volumes grew more modestly than value, an indication that the country is capturing more of each shipment’s worth rather than simply shipping more sacks.',
-        amharic_text: 'የኢትዮጵያ ቡና ወጪ ንግድ ባለፈው የበጀት ዓመት 1.4 ቢሊዮን ዶላር ደርሶ ሪከርድ መስበሩን የቡናና ሻይ ባለሥልጣን ማክሰኞ ዕለት አስታውቋል፤ ይህም አኃዝ ዘርፉ በዓመቱ መጀመሪያ ከተቀመጠለት ግብ በእጅጉ የላቀ ያደርገዋል። ባለሥልጣናቱ ለዕድገቱ ምክንያት ያሉት የዓለም አቀፍ ዋጋ መጨመርን፣ በምዕራቡ ድንበር በኩል የሚደረገውን ኮንትሮባንድ ንግድ ለመግታት የተጣለውን ጥብቅ ቁጥጥርን፣ እንዲሁም ቀደም ሲል በኢመደበኛ መንገድ ይሸጡ የነበሩ የአነስተኛ አርሶ አደሮች የቡና ማጠቢያ ጣቢያዎችን የመመዝገብ ሥራን ነው። ባለሥልጣኑ እንዳለው የመጠን ዕድገቱ ከዋጋው ዕድገት ያነሰ ነው፤ ይህ ደግሞ አገሪቱ በርካታ ጆንያ ከመላክ ይልቅ ከእያንዳንዱ ጭነት የበለጠ ጥቅም እያገኘች መሆኑን ያመለክታል።'
-      },
-      {
-        ord: 2, status: 'done', words: 188,
-        english_text: 'The gains have not been evenly shared. Cooperatives in Jimma and Sidama, which invested early in wet-mill upgrades and traceability paperwork, captured most of the premium contracts. Producers in newer growing districts still sell largely through intermediaries and see a fraction of the export price. A trader in Bonga described the gap plainly: two farmers a valley apart, the same cherry quality, and a price difference of nearly forty percent depending on whether the lot could be documented back to a registered station.',
-        amharic_text: 'ሆኖም ጥቅሙ በእኩል አልተከፋፈለም። በጅማና በሲዳማ የሚገኙ ኅብረት ሥራ ማኅበራት በእርጥብ ማቀነባበሪያ ማሻሻያና በተከታታይነት ማረጋገጫ ሰነዶች ላይ ቀድመው ኢንቨስት በማድረጋቸው አብዛኞቹን ተመራጭ ውሎች ወስደዋል። በአዲስ የቡና አብቃይ ወረዳዎች የሚገኙ አምራቾች ግን አሁንም በአብዛኛው በደላሎች በኩል ይሸጣሉ፤ ከወጪ ንግዱ ዋጋም የሚደርሳቸው ጥቂት ድርሻ ብቻ ነው። በቦንጋ የሚገኝ አንድ ነጋዴ ልዩነቱን በግልጽ እንዲህ ሲል ገለጸው፦ በአንድ ሸለቆ ልዩነት የሚገኙ ሁለት አርሶ አደሮች፣ ተመሳሳይ የቡና ፍሬ ጥራት ይዘው፣ ምርቱ ወደተመዘገበ ጣቢያ መመለስ ይችል እንደሆነ ብቻ በመወሰን የዋጋ ልዩነታቸው ወደ አርባ በመቶ ይደርሳል።'
-      },
-      {
-        ord: 3, status: 'pending', words: 201,
-        english_text: 'Logistics remain the weakest link. Containers still queue for days at the dry port, and exporters say the cost of a delayed shipment can erase the margin on an entire lot. The authority has promised a booking system that would give registered exporters a guaranteed slot, but no launch date has been published. Meanwhile, a shortage of certified graders means samples sometimes wait a week before cupping, and buyers abroad increasingly ask for turnaround guarantees that Ethiopian sellers cannot yet make.',
-        amharic_text: ''
-      },
-      {
-        ord: 4, status: 'failed', words: 157,
-        english_text: 'What happens next depends less on price than on paperwork. If the registration drive reaches the newer districts before the next harvest, the premium now concentrated in two zones could spread. If it stalls, the record will read as a good year for a narrow group of producers rather than a structural gain for the sector.',
-        amharic_text: '',
-        error: 'Gemini API returned 503 (model overloaded). Chunk left untouched — retry is safe.'
-      }
+      { id: 'p1',
+        en: 'Ethiopia’s coffee exports reached a record 1.4 billion dollars in the last fiscal year, the Coffee and Tea Authority said on Tuesday, a figure that puts the sector well ahead of the target set at the start of the period.',
+        am: 'የኢትዮጵያ ቡና ወጪ ንግድ ባለፈው የበጀት ዓመት 1.4 ቢሊዮን ዶላር ደርሶ ሪከርድ መስበሩን የቡናና ሻይ ባለሥልጣን ማክሰኞ ዕለት አስታውቋል፤ ይህም አኃዝ ዘርፉ በዓመቱ መጀመሪያ ከተቀመጠለት ግብ በእጅጉ የላቀ ያደርገዋል።' },
+      { id: 'p2',
+        en: 'Officials attributed the rise to a combination of higher global prices, tighter controls on contraband movement across the western border, and a push to register smallholder washing stations that had previously sold into informal channels.',
+        am: 'ባለሥልጣናቱ ለዕድገቱ ምክንያት ያሉት የዓለም አቀፍ ዋጋ መጨመርን፣ በምዕራቡ ድንበር በኩል የሚደረገውን ኮንትሮባንድ ንግድ ለመግታት የተጣለውን ጥብቅ ቁጥጥርን፣ እንዲሁም ቀደም ሲል በኢመደበኛ መንገድ ይሸጡ የነበሩ የአነስተኛ አርሶ አደሮች የቡና ማጠቢያ ጣቢያዎችን የመመዝገብ ሥራን ነው።' },
+      { id: 'p3',
+        en: 'The authority said volumes grew more modestly than value, an indication that the country is capturing more of each shipment’s worth rather than simply shipping more sacks.',
+        am: 'ባለሥልጣኑ እንዳለው የመጠን ዕድገቱ ከዋጋው ዕድገት ያነሰ ነው፤ ይህ ደግሞ አገሪቱ በርካታ ጆንያ ከመላክ ይልቅ ከእያንዳንዱ ጭነት የበለጠ ጥቅም እያገኘች መሆኑን ያመለክታል።' },
+      { id: 'p4',
+        en: 'The gains have not been evenly shared. Cooperatives in Jimma and Sidama, which invested early in wet-mill upgrades and traceability paperwork, captured most of the premium contracts.',
+        am: 'ሆኖም ጥቅሙ በእኩል አልተከፋፈለም። በጅማና በሲዳማ የሚገኙ ኅብረት ሥራ ማኅበራት በእርጥብ ማቀነባበሪያ ማሻሻያና በተከታታይነት ማረጋገጫ ሰነዶች ላይ ቀድመው ኢንቨስት በማድረጋቸው አብዛኞቹን ተመራጭ ውሎች ወስደዋል።' },
+      { id: 'p5',
+        en: 'Producers in newer growing districts still sell largely through intermediaries and see a fraction of the export price. A trader in Bonga described the gap plainly: two farmers a valley apart, the same cherry quality, and a price difference of nearly forty percent depending on whether the lot could be documented back to a registered station.',
+        am: 'በአዲስ የቡና አብቃይ ወረዳዎች የሚገኙ አምራቾች ግን አሁንም በአብዛኛው በደላሎች በኩል ይሸጣሉ፤ ከወጪ ንግዱ ዋጋም የሚደርሳቸው ጥቂት ድርሻ ብቻ ነው። በቦንጋ የሚገኝ አንድ ነጋዴ ልዩነቱን በግልጽ እንዲህ ሲል ገለጸው፦ በአንድ ሸለቆ ልዩነት የሚገኙ ሁለት አርሶ አደሮች፣ ተመሳሳይ የቡና ፍሬ ጥራት ይዘው፣ ምርቱ ወደተመዘገበ ጣቢያ መመለስ ይችል እንደሆነ ብቻ በመወሰን የዋጋ ልዩነታቸው ወደ አርባ በመቶ ይደርሳል።' },
+      { id: 'p6',
+        en: 'Logistics remain the weakest link. Containers still queue for days at the dry port, and exporters say the cost of a delayed shipment can erase the margin on an entire lot.',
+        am: 'የሎጂስቲክስ ሥርዓቱ አሁንም እጅግ ደካማው ማነቆ ሆኖ ቀጥሏል። ኮንቴነሮች በደረቅ ወደብ ለቀናት ተሰልፈው ይቆያሉ፤ ላኪዎችም እንደሚሉት የአንድ ጭነት መዘግየት በጠቅላላው ምርት ላይ የሚገኘውን ትርፍ ሙሉ በሙሉ ሊያጠፋ ይችላል።' },
+      { id: 'p7',
+        en: 'The authority has promised a booking system that would give registered exporters a guaranteed slot, but no launch date has been published. Meanwhile, a shortage of certified graders means samples sometimes wait a week before cupping, and buyers abroad increasingly ask for turnaround guarantees that Ethiopian sellers cannot yet make.',
+        am: 'ባለሥልጣኑ ለተመዘገቡ ላኪዎች ዋስትና ያለው ተራ የሚሰጥ የቅድሚያ ምዝገባ ሥርዓት እንደሚዘረጋ ቢያስታውቅም፣ የሚጀመርበት ቀን እስካሁን አልተገለጸም። በሌላ በኩል የተረጋገጡ የቡና ደረጃ ሰጪ ባለሙያዎች እጥረት በመኖሩ ናሙናዎች አንዳንዴ ለአንድ ሳምንት ሳይቀመሱ ይቆያሉ፤ የውጭ ገዢዎችም የኢትዮጵያ ሻጮች እስካሁን ሊሰጡ የማይችሉትን የጊዜ ገደብ ዋስትና በተደጋጋሚ እየጠየቁ ነው።' },
+      { id: 'p8',
+        en: 'What happens next depends less on price than on paperwork. If the registration drive reaches the newer districts before the next harvest, the premium now concentrated in two zones could spread.',
+        am: 'ቀጣዩ ምዕራፍ የሚወሰነው በዋጋ ሳይሆን በሰነድ ሥራ ነው። የምዝገባው ዘመቻ ከቀጣዩ ምርት ወቅት በፊት አዲሶቹን ወረዳዎች የሚደርስ ከሆነ፣ አሁን በሁለት ዞኖች ብቻ የተከማቸው ተጨማሪ ጥቅም ሊስፋፋ ይችላል።' },
+      { id: 'p9',
+        en: 'If it stalls, the record will read as a good year for a narrow group of producers rather than a structural gain for the sector.',
+        am: 'ካልተሳካ ግን ሪከርዱ ለዘርፉ የመዋቅር ለውጥ ሳይሆን ለጥቂት አምራቾች ጥሩ ዓመት ሆኖ ብቻ ይመዘገባል።' }
     ]
   },
+
+  /* Paragraph index each chunk starts at. `proposed` is what the AI split
+     returned, kept so the operator can always get back to it. */
+  boundaries: { art_9fa21c: [0, 3, 5, 7] },
+  proposed:   { art_9fa21c: [0, 3, 5, 7] },
+
+  /* Chunk translations, keyed by chunk identity — the prototype's stand-in for
+     hashing a chunk's source text. Re-cutting a boundary produces a new key, so
+     the affected chunk correctly has no translation and must be re-run, while
+     every untouched chunk keeps its own. */
+  translations: {
+    'p1|p2|p3': 'የኢትዮጵያ ቡና ወጪ ንግድ ባለፈው የበጀት ዓመት 1.4 ቢሊዮን ዶላር ደርሶ ሪከርድ መስበሩን የቡናና ሻይ ባለሥልጣን ማክሰኞ ዕለት አስታውቋል፤ ይህም አኃዝ ዘርፉ በዓመቱ መጀመሪያ ከተቀመጠለት ግብ በእጅጉ የላቀ ያደርገዋል።\n\nባለሥልጣናቱ ለዕድገቱ ምክንያት ያሉት የዓለም አቀፍ ዋጋ መጨመርን፣ በምዕራቡ ድንበር በኩል የሚደረገውን ኮንትሮባንድ ንግድ ለመግታት የተጣለውን ጥብቅ ቁጥጥርን፣ እንዲሁም ቀደም ሲል በኢመደበኛ መንገድ ይሸጡ የነበሩ የአነስተኛ አርሶ አደሮች የቡና ማጠቢያ ጣቢያዎችን የመመዝገብ ሥራን ነው።\n\nባለሥልጣኑ እንዳለው የመጠን ዕድገቱ ከዋጋው ዕድገት ያነሰ ነው፤ ይህ ደግሞ አገሪቱ በርካታ ጆንያ ከመላክ ይልቅ ከእያንዳንዱ ጭነት የበለጠ ጥቅም እያገኘች መሆኑን ያመለክታል።',
+    'p4|p5': 'ሆኖም ጥቅሙ በእኩል አልተከፋፈለም። በጅማና በሲዳማ የሚገኙ ኅብረት ሥራ ማኅበራት በእርጥብ ማቀነባበሪያ ማሻሻያና በተከታታይነት ማረጋገጫ ሰነዶች ላይ ቀድመው ኢንቨስት በማድረጋቸው አብዛኞቹን ተመራጭ ውሎች ወስደዋል።\n\nበአዲስ የቡና አብቃይ ወረዳዎች የሚገኙ አምራቾች ግን አሁንም በአብዛኛው በደላሎች በኩል ይሸጣሉ፤ ከወጪ ንግዱ ዋጋም የሚደርሳቸው ጥቂት ድርሻ ብቻ ነው። በቦንጋ የሚገኝ አንድ ነጋዴ ልዩነቱን በግልጽ እንዲህ ሲል ገለጸው፦ በአንድ ሸለቆ ልዩነት የሚገኙ ሁለት አርሶ አደሮች፣ ተመሳሳይ የቡና ፍሬ ጥራት ይዘው፣ ምርቱ ወደተመዘገበ ጣቢያ መመለስ ይችል እንደሆነ ብቻ በመወሰን የዋጋ ልዩነታቸው ወደ አርባ በመቶ ይደርሳል።'
+  },
+
+  /* Per-chunk state that is not derivable from the paragraphs, keyed by the
+     chunk's identity (its paragraph ids). A chunk whose boundaries change gets
+     a new key, so a stale failure never sticks to a chunk that no longer is
+     the one that failed. */
+  chunkState: {
+    'p8|p9': { status: 'failed', error: 'Gemini API returned 503 (model overloaded). Chunk left untouched — retry is safe.' }
+  },
+
+  /* Size guidance, read from the current split prompt. */
+  chunkTarget: { min: 500, max: 800, hard: 900 },
 
   /* --- retrieved lessons (Vectorize top-N) -------------------------------- */
   lessons: [
@@ -232,3 +270,39 @@ Numbers and punctuation: figures often spelled out in feature context where a ne
 DB.finalized = DB.articles
   .filter(a => a.status === 'final')
   .sort((a, b) => a.updated_at - b.updated_at);
+
+/* --- derivation ---------------------------------------------------------
+   Chunks are never stored; they are derived from paragraphs + boundaries.
+   ------------------------------------------------------------------------ */
+DB.chunkKey = ids => ids.join('|');
+
+DB.buildChunks = (articleId, boundaries) => {
+  const paras = DB.paragraphs[articleId] || [];
+  const bs = boundaries || DB.boundaries[articleId] || [0];
+  return bs.map((start, i) => {
+    const end = i + 1 < bs.length ? bs[i + 1] : paras.length;
+    const run = paras.slice(start, end);
+    const key = DB.chunkKey(run.map(p => p.id));
+    const amharic = DB.translations[key] || '';
+    const st = DB.chunkState[key];
+    return {
+      ord: i + 1, key, start, end, paragraphs: run,
+      english_text: run.map(p => p.en).join('\n\n'),
+      amharic_text: amharic,
+      status: amharic ? 'done' : (st ? st.status : 'pending'),
+      error: amharic ? null : (st ? st.error : null),
+      words: run.reduce((s, p) => s + p.en.trim().split(/\s+/).length, 0)
+    };
+  });
+};
+
+/* The Amharic a translate call would return for a chunk. */
+DB.translateChunk = chunk => chunk.paragraphs.map(p => p.am).join('\n\n');
+
+/* Article totals follow from the paragraphs, so they can never drift. */
+Object.entries(DB.paragraphs).forEach(([id, paras]) => {
+  const a = DB.articles.find(x => x.id === id);
+  if (!a) return;
+  a.words = paras.reduce((s, p) => s + p.en.trim().split(/\s+/).length, 0);
+  a.chunks = (DB.boundaries[id] || [0]).length;
+});
