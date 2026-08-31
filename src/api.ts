@@ -72,3 +72,25 @@ export function translateChunk(
 export function reassemble(articleId: string): Promise<{ amharicDraft: string }> {
   return fetch(`/api/articles/${articleId}/reassemble`, { method: "POST" }).then((res) => asJson(res));
 }
+
+export function patchDraft(
+  articleId: string,
+  amharicText: string,
+): Promise<{ amharicDraft: string; updatedAt: number }> {
+  return fetch(`/api/articles/${articleId}/draft`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ amharicText }),
+  }).then((res) => asJson(res));
+}
+
+export function finalizeArticle(
+  articleId: string,
+  amharicText: string,
+): Promise<{ article: ArticleDTO }> {
+  return fetch(`/api/articles/${articleId}/finalize`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ amharicText }),
+  }).then((res) => asJson(res));
+}
