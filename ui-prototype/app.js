@@ -110,10 +110,12 @@ function confirmDialog({ title, body, confirm = 'Confirm', danger, onConfirm }) 
 
 /* --- theme --------------------------------------------------------------- */
 (function theme() {
+  // A host page may already have stamped a theme on <html>; never fight it.
+  const stamped = document.documentElement.dataset.theme;
   let saved = null;
   try { saved = localStorage.getItem('te-theme'); } catch {}
   const prefersDark = matchMedia('(prefers-color-scheme: dark)').matches;
-  const mode = saved || (prefersDark ? 'dark' : 'light');
+  const mode = stamped || saved || (prefersDark ? 'dark' : 'light');
   document.documentElement.dataset.theme = mode;
   addEventListener('DOMContentLoaded', () => {
     const t = $('#theme-toggle');
