@@ -40,6 +40,8 @@ export interface ArticleRow {
   fix_count: number | null;
   /** Correction-capture state: null | 'pending' | 'captured' | 'skipped' (migration 0004). */
   correction_status: string | null;
+  /** null (live pipeline) | 'seed' (loaded via POST /api/seed) (migration 0005). */
+  source: string | null;
   created_at: number;
   updated_at: number;
 }

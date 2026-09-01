@@ -102,3 +102,35 @@ export async function setCorrectionStatus(
     .bind(correctionStatus, now, id)
     .run();
 }
+
+/**
+ * Seed intake (POST /api/seed): inserts an already-finalized article in one
+ * shot from an (English, AI-translation, human-final) triple, tagged
+ * source = 'seed' (migration 0005) so it's distinguishable from articles that
+ * went through the live pipeline. This gives the shared compare+capture path
+ * an article row to attach fix_count/correction_status/corrections to.
+ */
+export async function createSeedArticle(
+  d1: D1Database,
+  input: {
+    id: string;
+    sourceEnglish: string;
+    amharicDraft: string;
+    amharicFinal: string;
+    now: number;
+  },
+): Promise<void> {
+  await d1
+    .prepare(
+      "INSERT INTO articles (id, source_english, amharic_draft, amharic_final, status, source, created_at, updated_at) VALUES (?, ?, ?, ?, 'final', 'seed', ?, ?)",
+    )
+    .bind(
+      input.id,
+      input.sourceEnglish,
+      input.amharicDraft,
+      input.amharicFinal,
+      input.now,
+      input.now,
+    )
+    .run();
+}

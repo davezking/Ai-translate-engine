@@ -1,21 +1,38 @@
 import { useEffect, useState } from "react";
 import Icon from "./Icon";
 import PasteForm from "./PasteForm";
+import SeedIntake from "./SeedIntake";
 import { Toasts } from "./toast";
 import Workspace from "./Workspace";
+import { whoami } from "./api";
 
 function getArticleIdFromHash(): string | null {
   const match = window.location.hash.match(/^#\/articles\/([^/]+)/);
   return match ? match[1] : null;
 }
 
+function isSeedRoute(): boolean {
+  return window.location.hash === "#/seed";
+}
+
 export default function App() {
   const [articleId, setArticleId] = useState<string | null>(() => getArticleIdFromHash());
+  const [onSeedRoute, setOnSeedRoute] = useState(() => isSeedRoute());
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    const onHashChange = () => setArticleId(getArticleIdFromHash());
+    const onHashChange = () => {
+      setArticleId(getArticleIdFromHash());
+      setOnSeedRoute(isSeedRoute());
+    };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  useEffect(() => {
+    whoami()
+      .then((r) => setIsAdmin(r.user.role === "admin"))
+      .catch(() => setIsAdmin(false));
   }, []);
 
   function handleCreated(id: string) {
@@ -26,6 +43,12 @@ export default function App() {
   function handleBack() {
     window.location.hash = "";
     setArticleId(null);
+    setOnSeedRoute(false);
+  }
+
+  function handleSeedNav() {
+    window.location.hash = "#/seed";
+    setOnSeedRoute(true);
   }
 
   return (
@@ -43,6 +66,13 @@ export default function App() {
           <Icon name="plus" />
           New article
         </button>
+
+        {isAdmin && (
+          <button className="btn" style={{ width: "100%", marginTop: 8 }} onClick={handleSeedNav}>
+            <Icon name="doc" />
+            Seed intake
+          </button>
+        )}
       </aside>
 
       <div className="main">
@@ -52,11 +82,13 @@ export default function App() {
               Articles
             </span>
             <span className="sep">/</span>
-            <b>{articleId ? "Workspace" : "New article"}</b>
+            <b>{onSeedRoute ? "Seed intake" : articleId ? "Workspace" : "New article"}</b>
           </div>
         </header>
         <div className="scroll">
-          {articleId ? (
+          {onSeedRoute ? (
+            <SeedIntake />
+          ) : articleId ? (
             <Workspace articleId={articleId} onBack={handleBack} />
           ) : (
             <PasteForm onCreated={handleCreated} />
