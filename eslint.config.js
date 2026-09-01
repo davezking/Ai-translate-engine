@@ -33,4 +33,19 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
     },
   },
+  {
+    // Tests run on Node (vitest), and reach into Worker-typed code, so they see
+    // both global sets. Casting through `unknown` to build stub bindings is
+    // normal here, so the any-related rules are relaxed for tests only.
+    extends: [js.configs.recommended, ...tseslint.configs.recommended],
+    files: ["test/**/*.ts", "vitest.config.ts"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: { ...globals.node, ...globals.browser },
+    },
+    rules: {
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
 );
