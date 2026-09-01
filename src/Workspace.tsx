@@ -10,20 +10,13 @@ import {
   translateChunk,
 } from "./api";
 import Icon from "./Icon";
+import ReviewStage from "./ReviewStage";
+import { paragraphsOf, wordCount } from "./text";
 import { toast } from "./toast";
 
 const MIN_WORDS = 500;
 const MAX_WORDS = 800;
 const HARD_CAP = 900;
-
-function wordCount(text: string): number {
-  const trimmed = text.trim();
-  return trimmed ? trimmed.split(/\s+/).length : 0;
-}
-
-function paragraphsOf(text: string): string[] {
-  return text.split(/\n\s*\n/).filter((p) => p.trim() !== "");
-}
 
 interface WorkingChunk {
   id: string | null;
@@ -108,9 +101,11 @@ export default function Workspace({ articleId, onBack }: { articleId: string; on
     }
   }
 
-  const splitDone = stage === "translate";
+  const splitDone = stage === "translate" || stage === "review";
   const translateDone =
     chunks.length > 0 && chunks.every((c) => c.status === "translated" && c.amharicText);
+  const canReview = translateDone && Boolean(article?.amharic_draft);
+  const finalized = article?.status === "final";
 
   if (loading) return <div className="page center dim">Loading…</div>;
   if (!article) {
@@ -146,9 +141,16 @@ export default function Workspace({ articleId, onBack }: { articleId: string; on
 
       <div className="stepper" style={{ marginBottom: 20 }}>
         {STAGES.map((s, i) => {
-          const done = (s.key === "split" && splitDone) || (s.key === "translate" && translateDone);
+          const done =
+            (s.key === "split" && splitDone) ||
+            (s.key === "translate" && translateDone) ||
+            (s.key === "review" && finalized) ||
+            (s.key === "final" && finalized);
           const active = s.key === stage;
-          const disabled = i > 1;
+          const disabled =
+            s.key === "qa" ||
+            (s.key === "review" && !canReview) ||
+            s.key === "final";
           const cls = [done ? "done" : "", active ? "active" : "", disabled ? "ahead" : ""].join(" ");
           return (
             <button
@@ -209,13 +211,16 @@ export default function Workspace({ articleId, onBack }: { articleId: string; on
           onResplit={handleSplit}
           onContinue={() => setStage("translate")}
         />
-      ) : (
+      ) : stage === "translate" ? (
         <TranslateStage
           articleId={articleId}
           article={article}
           onArticleChange={setArticle}
           onBackToSplit={() => setStage("split")}
+          onContinueToReview={canReview ? () => setStage("review") : undefined}
         />
+      ) : (
+        <ReviewStage articleId={articleId} article={article} onArticleChange={setArticle} />
       )}
     </div>
   );
@@ -502,11 +507,13 @@ function TranslateStage({
   article,
   onArticleChange,
   onBackToSplit,
+  onContinueToReview,
 }: {
   articleId: string;
   article: ArticleDTO;
   onArticleChange: (a: ArticleDTO) => void;
   onBackToSplit: () => void;
+  onContinueToReview?: () => void;
 }) {
   const [state, setState] = useState<(ChunkDTO & { translateError?: string })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -702,6 +709,13 @@ function TranslateStage({
         <div className="section">
           <div className="section-head">
             <div className="section-title">Assembled Amharic draft</div>
+            {onContinueToReview && (
+              <div className="actions">
+                <button className="btn btn-primary" onClick={onContinueToReview}>
+                  Continue to review
+                </button>
+              </div>
+            )}
           </div>
           <div className="card card-pad geez">{article.amharic_draft}</div>
         </div>

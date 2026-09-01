@@ -42,3 +42,31 @@ export async function setArticleDraft(
     .bind(amharicDraft, now, id)
     .run();
 }
+
+/** Reviewer autosave: patches the working draft without touching status. */
+export async function patchArticleDraft(
+  d1: D1Database,
+  id: string,
+  amharicDraft: string,
+  now: number,
+): Promise<void> {
+  await d1
+    .prepare("UPDATE articles SET amharic_draft = ?, updated_at = ? WHERE id = ?")
+    .bind(amharicDraft, now, id)
+    .run();
+}
+
+/** Flushes the given text into both amharic_draft and amharic_final and marks the article final. */
+export async function finalizeArticle(
+  d1: D1Database,
+  id: string,
+  amharicFinal: string,
+  now: number,
+): Promise<void> {
+  await d1
+    .prepare(
+      "UPDATE articles SET amharic_draft = ?, amharic_final = ?, status = 'final', updated_at = ? WHERE id = ?",
+    )
+    .bind(amharicFinal, amharicFinal, now, id)
+    .run();
+}
