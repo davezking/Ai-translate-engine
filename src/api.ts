@@ -260,3 +260,29 @@ export function testStyleProfile(id: string, testText: string): Promise<StyleTes
     body: JSON.stringify({ testText }),
   }).then((res) => asJson(res));
 }
+
+export type PromptKey = "split" | "translate" | "qa";
+
+export const PROMPT_KEYS: PromptKey[] = ["split", "translate", "qa"];
+
+export interface CurrentPromptDTO {
+  key: PromptKey;
+  currentVersionId: string;
+  version: number;
+  body: string;
+  createdAt: number;
+}
+
+/** Admin-only: the prompt body the pipeline is currently running for this key. */
+export function getPrompt(key: PromptKey): Promise<CurrentPromptDTO> {
+  return fetch(`/api/prompts/${key}`).then((res) => asJson(res));
+}
+
+/** Admin-only: publishes a new immutable version and makes it current. */
+export function publishPrompt(key: PromptKey, body: string): Promise<CurrentPromptDTO> {
+  return fetch(`/api/prompts/${key}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ body }),
+  }).then((res) => asJson(res));
+}

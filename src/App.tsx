@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Icon from "./Icon";
 import MetricsView from "./MetricsView";
 import PasteForm from "./PasteForm";
+import PromptsAdmin from "./PromptsAdmin";
 import SeedIntake from "./SeedIntake";
 import StylesAdmin from "./StylesAdmin";
 import { Toasts } from "./toast";
@@ -25,11 +26,16 @@ function isStylesRoute(): boolean {
   return window.location.hash === "#/styles";
 }
 
+function isPromptsRoute(): boolean {
+  return window.location.hash === "#/prompts";
+}
+
 export default function App() {
   const [articleId, setArticleId] = useState<string | null>(() => getArticleIdFromHash());
   const [onSeedRoute, setOnSeedRoute] = useState(() => isSeedRoute());
   const [onMetricsRoute, setOnMetricsRoute] = useState(() => isMetricsRoute());
   const [onStylesRoute, setOnStylesRoute] = useState(() => isStylesRoute());
+  const [onPromptsRoute, setOnPromptsRoute] = useState(() => isPromptsRoute());
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
@@ -38,6 +44,7 @@ export default function App() {
       setOnSeedRoute(isSeedRoute());
       setOnMetricsRoute(isMetricsRoute());
       setOnStylesRoute(isStylesRoute());
+      setOnPromptsRoute(isPromptsRoute());
     };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
@@ -60,6 +67,7 @@ export default function App() {
     setOnSeedRoute(false);
     setOnMetricsRoute(false);
     setOnStylesRoute(false);
+    setOnPromptsRoute(false);
   }
 
   function handleSeedNav() {
@@ -75,6 +83,11 @@ export default function App() {
   function handleStylesNav() {
     window.location.hash = "#/styles";
     setOnStylesRoute(true);
+  }
+
+  function handlePromptsNav() {
+    window.location.hash = "#/prompts";
+    setOnPromptsRoute(true);
   }
 
   return (
@@ -106,6 +119,17 @@ export default function App() {
         )}
 
         {isAdmin && (
+          <button
+            className="btn"
+            style={{ width: "100%", marginTop: 8 }}
+            onClick={handlePromptsNav}
+          >
+            <Icon name="tune" />
+            Prompt engine
+          </button>
+        )}
+
+        {isAdmin && (
           <button className="btn" style={{ width: "100%", marginTop: 8 }} onClick={handleSeedNav}>
             <Icon name="doc" />
             Seed intake
@@ -127,9 +151,11 @@ export default function App() {
                   ? "Fixes trend"
                   : onStylesRoute
                     ? "Writer styles"
-                    : articleId
-                      ? "Workspace"
-                      : "New article"}
+                    : onPromptsRoute
+                      ? "Prompt engine"
+                      : articleId
+                        ? "Workspace"
+                        : "New article"}
             </b>
           </div>
         </header>
@@ -140,6 +166,8 @@ export default function App() {
             <MetricsView />
           ) : onStylesRoute ? (
             <StylesAdmin />
+          ) : onPromptsRoute ? (
+            <PromptsAdmin />
           ) : articleId ? (
             <Workspace articleId={articleId} onBack={handleBack} />
           ) : (
