@@ -14,8 +14,15 @@ export const onRequestPost: PagesFunction<Env, string, AuthedData> = async (cont
 
   const article = await getArticle(db(context.env), articleId);
   if (!article) return Response.json({ error: "Article not found" }, { status: 404 });
+  // Finalizing twice would overwrite amharic_final and, worse, re-run the
+  // compare and capture a SECOND corrections row and vector for the same
+  // article — duplicate lessons that permanently skew every later retrieval.
+  if (article.status === "final") {
+    return Response.json({ error: "Article is already finalized" }, { status: 409 });
+  }
 
-  const finalText = typeof body?.amharicText === "string" ? body.amharicText : article.amharic_draft;
+  const finalText =
+    typeof body?.amharicText === "string" ? body.amharicText : article.amharic_draft;
   if (!finalText || !finalText.trim()) {
     return Response.json({ error: "No draft to finalize" }, { status: 400 });
   }

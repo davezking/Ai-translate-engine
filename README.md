@@ -20,7 +20,7 @@ English in, publication-ready Amharic out. See `architecture.md` for the full de
 Every `/api/*` route is gated by `functions/api/_middleware.ts`, which verifies the Cloudflare Access JWT (`functions/lib/auth.ts`), looks the email up in D1 `users`, and attaches `{ id, email, role }` to the request. Admin-only routes additionally call `requireAdmin(context.data.user)` (see `functions/api/admin/whoami.ts` for the pattern) — this is what gates the prompt engine (`/api/prompts/*`) and style management (`/api/styles`, `/api/styles/:id/*`). Style _selection_ (`GET /api/styles/approved`, `PATCH /api/articles/:id/style`) is deliberately open to any authenticated user: it only points an article at an already-approved profile.
 
 - **Deployed:** set `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` (Pages project env vars, or uncomment `[vars]` in `wrangler.toml`) to match the Access application protecting this app. Required — without them the app fails closed to the dev-only bypass below, which only ever activates when both are unset.
-- **Local dev:** leave `ACCESS_TEAM_DOMAIN`/`ACCESS_AUD` unset and set `DEV_BYPASS_EMAIL` in `.dev.vars` to one of the seeded user emails (see `migrations/0002_seed_prompts_and_users.sql`) to simulate being signed in as them.
+- **Local dev:** leave `ACCESS_TEAM_DOMAIN`/`ACCESS_AUD` unset and set `DEV_BYPASS_EMAIL` in `.dev.vars` to one of the seeded user emails (see `migrations/0002_seed_prompts_and_users.sql`) to simulate being signed in as them. The bypass is honoured **only** for requests arriving on a local hostname (`localhost`, `127.0.0.1`, `::1`), so an environment that is missing the `ACCESS_*` vars fails closed and logs why, rather than serving `/api/*` to the internet as that identity.
 
 ## Scripts
 

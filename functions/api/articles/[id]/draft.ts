@@ -13,6 +13,14 @@ export const onRequestPatch: PagesFunction<Env, string, AuthedData> = async (con
 
   const article = await getArticle(db(context.env), articleId);
   if (!article) return Response.json({ error: "Article not found" }, { status: 404 });
+  // A finalized article is immutable, same as for /qa and /style. The editor
+  // disables itself once finalized, but that is client-side only.
+  if (article.status === "final") {
+    return Response.json(
+      { error: "Article is finalized; the draft can no longer be edited" },
+      { status: 409 },
+    );
+  }
 
   if (article.amharic_draft === body.amharicText) {
     return Response.json({ amharicDraft: article.amharic_draft, updatedAt: article.updated_at });
