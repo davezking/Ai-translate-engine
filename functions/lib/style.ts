@@ -31,7 +31,9 @@ Return ONLY the guidelines as plain text (a short list of concrete points), with
 preamble, no restatement of the samples, and no markdown formatting.`;
 
 function buildUserContent(sampleArticles: string[]): string {
-  return sampleArticles.map((sample, i) => `=== SAMPLE ${i + 1} ===\n${sample.trim()}`).join("\n\n");
+  return sampleArticles
+    .map((sample, i) => `=== SAMPLE ${i + 1} ===\n${sample.trim()}`)
+    .join("\n\n");
 }
 
 /**

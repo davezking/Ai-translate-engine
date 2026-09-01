@@ -13,6 +13,8 @@ const PATHS: Record<string, string> = {
   undo: "M6 3.4 2.6 6.8 6 10.2M2.6 6.8h6.6a3.4 3.4 0 0 1 0 6.8H6.6",
   doc: "M4 2.5h5l3 3v8H4zM9 2.5v3h3",
   trend: "M2.5 12.5V3M2.5 12.5h11M4.5 10.5l3-3.5 2.2 2 3.3-4.5",
+  voice:
+    "M8 2.5a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-5 0v-3A2.5 2.5 0 0 1 8 2.5ZM4.5 8a3.5 3.5 0 0 0 7 0M8 11.5v2",
 };
 
 export default function Icon({

@@ -218,3 +218,22 @@ export function createStyleProfile(
 export function listStyleProfiles(): Promise<{ profiles: StyleProfileDTO[] }> {
   return fetch("/api/styles").then((res) => asJson(res));
 }
+
+/** Admin-only: flips a style profile to approved = ready for general use. */
+export function approveStyleProfile(id: string): Promise<{ id: string; approved: boolean }> {
+  return fetch(`/api/styles/${id}/approve`, { method: "PATCH" }).then((res) => asJson(res));
+}
+
+export interface StyleTestResultDTO {
+  withoutStyle: string;
+  withStyle: string;
+}
+
+/** Admin-only: runs the live QA prompt over a short test text with vs. without this profile's guidelines. */
+export function testStyleProfile(id: string, testText: string): Promise<StyleTestResultDTO> {
+  return fetch(`/api/styles/${id}/test`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ testText }),
+  }).then((res) => asJson(res));
+}

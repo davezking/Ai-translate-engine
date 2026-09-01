@@ -3,6 +3,7 @@ import Icon from "./Icon";
 import MetricsView from "./MetricsView";
 import PasteForm from "./PasteForm";
 import SeedIntake from "./SeedIntake";
+import StylesAdmin from "./StylesAdmin";
 import { Toasts } from "./toast";
 import Workspace from "./Workspace";
 import { whoami } from "./api";
@@ -20,10 +21,15 @@ function isMetricsRoute(): boolean {
   return window.location.hash === "#/metrics";
 }
 
+function isStylesRoute(): boolean {
+  return window.location.hash === "#/styles";
+}
+
 export default function App() {
   const [articleId, setArticleId] = useState<string | null>(() => getArticleIdFromHash());
   const [onSeedRoute, setOnSeedRoute] = useState(() => isSeedRoute());
   const [onMetricsRoute, setOnMetricsRoute] = useState(() => isMetricsRoute());
+  const [onStylesRoute, setOnStylesRoute] = useState(() => isStylesRoute());
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
@@ -31,6 +37,7 @@ export default function App() {
       setArticleId(getArticleIdFromHash());
       setOnSeedRoute(isSeedRoute());
       setOnMetricsRoute(isMetricsRoute());
+      setOnStylesRoute(isStylesRoute());
     };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
@@ -52,6 +59,7 @@ export default function App() {
     setArticleId(null);
     setOnSeedRoute(false);
     setOnMetricsRoute(false);
+    setOnStylesRoute(false);
   }
 
   function handleSeedNav() {
@@ -62,6 +70,11 @@ export default function App() {
   function handleMetricsNav() {
     window.location.hash = "#/metrics";
     setOnMetricsRoute(true);
+  }
+
+  function handleStylesNav() {
+    window.location.hash = "#/styles";
+    setOnStylesRoute(true);
   }
 
   return (
@@ -86,6 +99,13 @@ export default function App() {
         </button>
 
         {isAdmin && (
+          <button className="btn" style={{ width: "100%", marginTop: 8 }} onClick={handleStylesNav}>
+            <Icon name="voice" />
+            Writer styles
+          </button>
+        )}
+
+        {isAdmin && (
           <button className="btn" style={{ width: "100%", marginTop: 8 }} onClick={handleSeedNav}>
             <Icon name="doc" />
             Seed intake
@@ -105,9 +125,11 @@ export default function App() {
                 ? "Seed intake"
                 : onMetricsRoute
                   ? "Fixes trend"
-                  : articleId
-                    ? "Workspace"
-                    : "New article"}
+                  : onStylesRoute
+                    ? "Writer styles"
+                    : articleId
+                      ? "Workspace"
+                      : "New article"}
             </b>
           </div>
         </header>
@@ -116,6 +138,8 @@ export default function App() {
             <SeedIntake />
           ) : onMetricsRoute ? (
             <MetricsView />
+          ) : onStylesRoute ? (
+            <StylesAdmin />
           ) : articleId ? (
             <Workspace articleId={articleId} onBack={handleBack} />
           ) : (
