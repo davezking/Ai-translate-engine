@@ -29,12 +29,18 @@ function fromChunkDTOs(chunks: ChunkDTO[]): WorkingChunk[] {
   return chunks
     .slice()
     .sort((a, b) => a.ord - b.ord)
-    .map((c) => ({ id: c.id, englishText: c.english_text, amharicText: c.amharic_text, status: c.status }));
+    .map((c) => ({
+      id: c.id,
+      englishText: c.english_text,
+      amharicText: c.amharic_text,
+      status: c.status,
+    }));
 }
 
 function sameChunks(a: WorkingChunk[], b: WorkingChunk[]): boolean {
   return (
-    a.length === b.length && a.every((c, i) => c.id === b[i].id && c.englishText === b[i].englishText)
+    a.length === b.length &&
+    a.every((c, i) => c.id === b[i].id && c.englishText === b[i].englishText)
   );
 }
 
@@ -47,7 +53,13 @@ const STAGES = [
 ] as const;
 type StageKey = (typeof STAGES)[number]["key"];
 
-export default function Workspace({ articleId, onBack }: { articleId: string; onBack: () => void }) {
+export default function Workspace({
+  articleId,
+  onBack,
+}: {
+  articleId: string;
+  onBack: () => void;
+}) {
   const [article, setArticle] = useState<ArticleDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -144,14 +156,15 @@ export default function Workspace({ articleId, onBack }: { articleId: string; on
           const done =
             (s.key === "split" && splitDone) ||
             (s.key === "translate" && translateDone) ||
+            (s.key === "qa" && (article.status === "qad" || finalized)) ||
             (s.key === "review" && finalized) ||
             (s.key === "final" && finalized);
           const active = s.key === stage;
           const disabled =
-            s.key === "qa" ||
-            (s.key === "review" && !canReview) ||
-            s.key === "final";
-          const cls = [done ? "done" : "", active ? "active" : "", disabled ? "ahead" : ""].join(" ");
+            s.key === "qa" || (s.key === "review" && !canReview) || s.key === "final";
+          const cls = [done ? "done" : "", active ? "active" : "", disabled ? "ahead" : ""].join(
+            " ",
+          );
           return (
             <button
               key={s.key}
@@ -400,7 +413,11 @@ function SplitStage({
             >
               <Icon name="retry" /> AI proposal
             </button>
-            <button className="btn btn-sm btn-primary" onClick={handleSave} disabled={busy !== null}>
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={handleSave}
+              disabled={busy !== null}
+            >
               {busy === "saving" ? (
                 <span className="spin" />
               ) : dirty ? (
@@ -420,8 +437,8 @@ function SplitStage({
             <b>
               {losing} chunk{losing === 1 ? "" : "s"} will need re-translating.
             </b>{" "}
-            Changing a boundary changes a chunk's source text, so its existing Amharic no longer applies.
-            Chunks you didn't touch keep theirs.
+            Changing a boundary changes a chunk's source text, so its existing Amharic no longer
+            applies. Chunks you didn't touch keep theirs.
           </span>
         </div>
       ) : (
@@ -436,7 +453,9 @@ function SplitStage({
       <div>
         {chunks.map((c, i) => {
           const size = sizeOf(c, chunks.length);
-          const mergedWords = i ? wordCount(c.englishText) + wordCount(chunks[i - 1].englishText) : 0;
+          const mergedWords = i
+            ? wordCount(c.englishText) + wordCount(chunks[i - 1].englishText)
+            : 0;
           const tooBig = mergedWords > HARD_CAP;
           const paras = paragraphsOf(c.englishText);
           return (
@@ -534,12 +553,20 @@ function TranslateStage({
   }, [articleId]);
 
   async function maybeReassemble(list: (ChunkDTO & { translateError?: string })[]) {
-    if (list.length === 0 || !list.every((c) => c.status === "translated" && c.amharic_text)) return;
+    if (list.length === 0 || !list.every((c) => c.status === "translated" && c.amharic_text))
+      return;
     setReassembling(true);
     try {
-      const { amharicDraft } = await reassemble(articleId);
-      onArticleChange({ ...article, amharic_draft: amharicDraft, status: "drafted" });
-      toast("All chunks translated and reassembled into the draft.");
+      const { amharicDraft, qa, qaError } = await reassemble(articleId);
+      onArticleChange({ ...article, amharic_draft: amharicDraft, status: qa ? "qad" : "drafted" });
+      if (qa) {
+        toast("All chunks translated, reassembled, and QA'd.");
+      } else {
+        toast(
+          `Reassembled, but QA failed (${qaError ?? "unknown error"}). You can still continue to review with the raw translation.`,
+          "err",
+        );
+      }
     } catch {
       // The reviewer can still see per-chunk translations; reassembly can be retried later.
     } finally {
@@ -583,7 +610,12 @@ function TranslateStage({
     setRunning(false);
   }
 
-  if (loading) return <div className="center dim" style={{ padding: 40 }}>Loading chunks…</div>;
+  if (loading)
+    return (
+      <div className="center dim" style={{ padding: 40 }}>
+        Loading chunks…
+      </div>
+    );
 
   const done = state.filter((c) => c.status === "translated").length;
   const failed = state.filter((c) => c.status === "failed").length;
@@ -605,7 +637,9 @@ function TranslateStage({
               </span>
             </div>
             <div className={`bar${allDone ? " ok" : ""}`}>
-              <i style={{ width: `${state.length ? Math.round((done / state.length) * 100) : 0}%` }} />
+              <i
+                style={{ width: `${state.length ? Math.round((done / state.length) * 100) : 0}%` }}
+              />
             </div>
           </div>
           <div className="row" style={{ flex: "none", gap: 8 }}>
@@ -652,7 +686,11 @@ function TranslateStage({
               ) : (
                 <span
                   className={`pill ${
-                    c.status === "translated" ? "pill-ok" : c.status === "failed" ? "pill-danger" : ""
+                    c.status === "translated"
+                      ? "pill-ok"
+                      : c.status === "failed"
+                        ? "pill-danger"
+                        : ""
                   }`}
                 >
                   {c.status}

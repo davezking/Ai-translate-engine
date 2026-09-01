@@ -69,10 +69,30 @@ export function translateChunk(
   );
 }
 
-export function reassemble(articleId: string): Promise<{ amharicDraft: string }> {
+export interface ReassembleResultDTO {
+  amharicDraft: string;
+  /** true if the QA pass ran and amharicDraft is its output; false if QA failed and this is the raw reassembled draft. */
+  qa: boolean;
+  qaError?: string;
+}
+
+export function reassemble(articleId: string): Promise<ReassembleResultDTO> {
   return fetch(`/api/articles/${articleId}/reassemble`, { method: "POST" }).then((res) =>
     asJson(res),
   );
+}
+
+export interface QaResultDTO {
+  amharicDraft: string;
+  topN: number;
+  retrievedCorrectionIds: string[];
+  lessons: { correctionId: string; topicTag: string | null; score: number }[];
+  retrievalError?: string;
+}
+
+/** Runs the QA pass (retrieve lessons + Gemini) and returns the QA'd draft. */
+export function qaArticle(articleId: string): Promise<QaResultDTO> {
+  return fetch(`/api/articles/${articleId}/qa`, { method: "POST" }).then((res) => asJson(res));
 }
 
 export function patchDraft(
@@ -153,4 +173,22 @@ export async function submitSeed(triple: SeedTriple): Promise<SeedResultDTO> {
 
 export function getSeedCount(): Promise<{ count: number }> {
   return fetch("/api/seed").then((res) => asJson(res));
+}
+
+export interface FixMetricPoint {
+  articleId: string;
+  /** null = compare hasn't run yet or the article predates the correction library; distinct from 0 ("no fixes"). */
+  fixCount: number | null;
+  correctionStatus: string | null;
+  finalizedAt: number;
+}
+
+export interface FixMetricsDTO {
+  points: FixMetricPoint[];
+  baselineDays: number;
+  baselineEndsAt: number | null;
+}
+
+export function getFixMetrics(): Promise<FixMetricsDTO> {
+  return fetch("/api/metrics/fixes").then((res) => asJson(res));
 }

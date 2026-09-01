@@ -9,6 +9,11 @@ export interface Env {
   ACCESS_AUD?: string;
   /** Local-dev-only bypass: an email treated as authenticated when Access isn't configured. Never set outside .dev.vars. */
   DEV_BYPASS_EMAIL?: string;
+  /**
+   * How many past correction lessons the QA pass retrieves (top-N). Tunable
+   * without a redeploy via the Pages env var; parsed by qaRetrievalTopN().
+   */
+  QA_RETRIEVAL_TOP_N?: string;
 }
 
 /**
@@ -40,8 +45,26 @@ export function geminiKey(env: Env): string {
   return env.GEMINI_API_KEY;
 }
 
+/** Default number of correction lessons retrieved into the QA prompt. */
+export const QA_RETRIEVAL_TOP_N_DEFAULT = 4;
+
+/**
+ * Resolves the QA retrieval top-N from env, defaulting to
+ * QA_RETRIEVAL_TOP_N_DEFAULT and clamping to a sane 1..20 range so a bad env
+ * value can neither disable retrieval nor blow up the prompt size.
+ */
+export function qaRetrievalTopN(env: Env): number {
+  const raw = env.QA_RETRIEVAL_TOP_N;
+  if (raw === undefined || raw.trim() === "") return QA_RETRIEVAL_TOP_N_DEFAULT;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 1) return QA_RETRIEVAL_TOP_N_DEFAULT;
+  return Math.min(20, Math.round(n));
+}
+
 /** Presence check only — never triggers a paid call. */
-export function bindingStatus(env: Env): Record<"DB" | "VECTORIZE" | "AI" | "GEMINI_API_KEY", boolean> {
+export function bindingStatus(
+  env: Env,
+): Record<"DB" | "VECTORIZE" | "AI" | "GEMINI_API_KEY", boolean> {
   return {
     DB: Boolean(env.DB),
     VECTORIZE: Boolean(env.VECTORIZE),

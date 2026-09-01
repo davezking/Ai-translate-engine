@@ -43,6 +43,29 @@ export async function setArticleDraft(
     .run();
 }
 
+/**
+ * Stores the QA pass output as the working draft AND as the immutable
+ * amharic_qa snapshot, and moves the article to the 'qad' state (pipeline:
+ * drafted -> qad -> review -> final). amharic_draft is what the Phase 2
+ * reviewer edits (and autosave overwrites); amharic_qa is never touched again,
+ * so finalize-compare has a faithful pre-edit machine side to compare against
+ * (migration 0006). QA runs before human review, so no reviewer edits exist to
+ * lose here (Hard rule 5).
+ */
+export async function setArticleQaDraft(
+  d1: D1Database,
+  id: string,
+  amharicText: string,
+  now: number,
+): Promise<void> {
+  await d1
+    .prepare(
+      "UPDATE articles SET amharic_draft = ?, amharic_qa = ?, status = 'qad', updated_at = ? WHERE id = ?",
+    )
+    .bind(amharicText, amharicText, now, id)
+    .run();
+}
+
 /** Reviewer autosave: patches the working draft without touching status. */
 export async function patchArticleDraft(
   d1: D1Database,
@@ -101,6 +124,33 @@ export async function setCorrectionStatus(
     .prepare("UPDATE articles SET correction_status = ?, updated_at = ? WHERE id = ?")
     .bind(correctionStatus, now, id)
     .run();
+}
+
+export interface FinalizedArticleFixRow {
+  id: string;
+  fix_count: number | null;
+  correction_status: string | null;
+  updated_at: number;
+}
+
+/**
+ * Finalized articles with their fix_count, ordered by finalize time, for the
+ * fixes-per-article trend view (Requirement 13). Ordered by updated_at: once
+ * an article is 'final' nothing touches it again (review edits and QA both
+ * refuse on a finalized article), except the finalize-compare's own
+ * recordCompareResult/setCorrectionStatus calls that immediately follow
+ * finalizeArticle in the same request — so updated_at still lands at
+ * finalize time, not later. Cheap: one indexed-order SELECT, no aggregation.
+ */
+export async function listFinalizedArticleFixCounts(
+  d1: D1Database,
+): Promise<FinalizedArticleFixRow[]> {
+  const { results } = await d1
+    .prepare(
+      "SELECT id, fix_count, correction_status, updated_at FROM articles WHERE status = 'final' ORDER BY updated_at ASC",
+    )
+    .all<FinalizedArticleFixRow>();
+  return results;
 }
 
 /**

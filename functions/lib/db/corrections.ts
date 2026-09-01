@@ -19,6 +19,27 @@ export async function insertCorrection(
     .run();
 }
 
+/**
+ * Resolves Vectorize match ids back to their corrections rows. Returned in the
+ * order given (the caller's similarity ranking), skipping any id with no row —
+ * a vector without a matching row is a tolerated read-time miss (e.g. a row
+ * deleted after the query), never fabricated. See Hard rule 3 for why the two
+ * stores are kept 1:1 on the write side.
+ */
+export async function getCorrectionsByVectorIds(
+  d1: D1Database,
+  vectorIds: string[],
+): Promise<CorrectionRow[]> {
+  if (vectorIds.length === 0) return [];
+  const placeholders = vectorIds.map(() => "?").join(", ");
+  const { results } = await d1
+    .prepare(`SELECT * FROM corrections WHERE vector_id IN (${placeholders})`)
+    .bind(...vectorIds)
+    .all<CorrectionRow>();
+  const byVectorId = new Map(results.map((r) => [r.vector_id, r]));
+  return vectorIds.map((id) => byVectorId.get(id)).filter((r): r is CorrectionRow => Boolean(r));
+}
+
 export async function listCorrections(d1: D1Database): Promise<CorrectionRow[]> {
   const { results } = await d1
     .prepare("SELECT * FROM corrections ORDER BY created_at DESC")
