@@ -1,6 +1,7 @@
 import type { Env } from "../../../lib/env";
 import { db } from "../../../lib/env";
 import { finalizeArticle, getArticle } from "../../../lib/db/articles";
+import { enforceMaxLength, MAX_ARTICLE_CHARS } from "../../../lib/limits";
 import { onArticleFinalized } from "../../../lib/hooks";
 import type { AuthedData } from "../../_middleware";
 
@@ -26,6 +27,8 @@ export const onRequestPost: PagesFunction<Env, string, AuthedData> = async (cont
   if (!finalText || !finalText.trim()) {
     return Response.json({ error: "No draft to finalize" }, { status: 400 });
   }
+  const tooLong = enforceMaxLength("amharicText", finalText, MAX_ARTICLE_CHARS);
+  if (tooLong) return tooLong;
 
   const now = Date.now();
   await finalizeArticle(db(context.env), articleId, finalText, now);

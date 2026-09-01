@@ -3,6 +3,7 @@ import { db } from "../../lib/env";
 import { requireAdmin } from "../../lib/requireAdmin";
 import { createStyleProfile, listStyleProfiles } from "../../lib/db/styleProfiles";
 import { deriveStyleGuidelines } from "../../lib/style";
+import { enforceMaxLength, MAX_STYLE_SAMPLE_CHARS, MAX_STYLE_SAMPLES } from "../../lib/limits";
 import type { AuthedData } from "../_middleware";
 
 /**
@@ -32,6 +33,16 @@ export const onRequestPost: PagesFunction<Env, string, AuthedData> = async (cont
       { error: "writerName and at least one non-empty sampleArticles entry are required" },
       { status: 400 },
     );
+  }
+  if (sampleArticles.length > MAX_STYLE_SAMPLES) {
+    return Response.json(
+      { error: `Too many sample articles: ${sampleArticles.length}, limit ${MAX_STYLE_SAMPLES}` },
+      { status: 413 },
+    );
+  }
+  for (const [i, sample] of sampleArticles.entries()) {
+    const tooLong = enforceMaxLength(`sampleArticles[${i}]`, sample, MAX_STYLE_SAMPLE_CHARS);
+    if (tooLong) return tooLong;
   }
 
   let derivedGuidelines: string;

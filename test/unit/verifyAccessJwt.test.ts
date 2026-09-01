@@ -95,19 +95,17 @@ describe("issuer", () => {
     await expect(verify(token, TEAM, AUD)).resolves.toBeNull();
   });
 
-  it.each([
-    `https://${TEAM}`,
-    `${TEAM}/`,
-    `  ${TEAM}  `,
-    `HTTPS://${TEAM}`,
-  ])("still accepts a valid token when the team domain is configured as %p", async (configured) => {
-    // A slightly-off env var must not silently reject every real token.
-    stubCerts([keyA]);
-    const verify = await freshVerifier();
-    const token = await signToken(keyA, claims());
+  it.each([`https://${TEAM}`, `${TEAM}/`, `  ${TEAM}  `, `HTTPS://${TEAM}`])(
+    "still accepts a valid token when the team domain is configured as %p",
+    async (configured) => {
+      // A slightly-off env var must not silently reject every real token.
+      stubCerts([keyA]);
+      const verify = await freshVerifier();
+      const token = await signToken(keyA, claims());
 
-    await expect(verify(token, configured, AUD)).resolves.toBe("reviewer@example.com");
-  });
+      await expect(verify(token, configured, AUD)).resolves.toBe("reviewer@example.com");
+    },
+  );
 });
 
 describe("validity window", () => {

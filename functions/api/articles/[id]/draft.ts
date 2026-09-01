@@ -1,6 +1,7 @@
 import type { Env } from "../../../lib/env";
 import { db } from "../../../lib/env";
 import { getArticle, patchArticleDraft } from "../../../lib/db/articles";
+import { enforceMaxLength, MAX_ARTICLE_CHARS } from "../../../lib/limits";
 import type { AuthedData } from "../../_middleware";
 
 /** Reviewer autosave: writes the working Amharic draft. Skips the write if unchanged. */
@@ -10,6 +11,8 @@ export const onRequestPatch: PagesFunction<Env, string, AuthedData> = async (con
   if (typeof body?.amharicText !== "string") {
     return Response.json({ error: "amharicText is required" }, { status: 400 });
   }
+  const tooLong = enforceMaxLength("amharicText", body.amharicText, MAX_ARTICLE_CHARS);
+  if (tooLong) return tooLong;
 
   const article = await getArticle(db(context.env), articleId);
   if (!article) return Response.json({ error: "Article not found" }, { status: 404 });

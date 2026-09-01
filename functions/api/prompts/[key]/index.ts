@@ -2,6 +2,7 @@ import type { Env } from "../../../lib/env";
 import { db } from "../../../lib/env";
 import { requireAdmin } from "../../../lib/requireAdmin";
 import { isPromptKey } from "../../../lib/promptKey";
+import { enforceMaxLength, MAX_PROMPT_BODY_CHARS } from "../../../lib/limits";
 import { getCurrentPrompt, publishPromptVersion } from "../../../lib/db/prompts";
 import type { AuthedData } from "../../_middleware";
 
@@ -51,6 +52,8 @@ export const onRequestPut: PagesFunction<Env, string, AuthedData> = async (conte
   if (!promptBody) {
     return Response.json({ error: "A non-empty prompt body is required" }, { status: 400 });
   }
+  const tooLong = enforceMaxLength("body", promptBody, MAX_PROMPT_BODY_CHARS);
+  if (tooLong) return tooLong;
 
   const d1 = db(context.env);
   const id = crypto.randomUUID();
