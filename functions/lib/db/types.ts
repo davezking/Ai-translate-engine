@@ -38,6 +38,8 @@ export interface ArticleRow {
   status: string;
   writer_style_id: string | null;
   fix_count: number | null;
+  /** Correction-capture state: null | 'pending' | 'captured' | 'skipped' (migration 0004). */
+  correction_status: string | null;
   created_at: number;
   updated_at: number;
 }

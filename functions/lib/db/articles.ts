@@ -70,3 +70,35 @@ export async function finalizeArticle(
     .bind(amharicFinal, amharicFinal, now, id)
     .run();
 }
+
+/**
+ * Records the finalize-compare outcome: the fix count and the correction-capture
+ * state (see migration 0004). Does not touch pipeline `status`.
+ */
+export async function recordCompareResult(
+  d1: D1Database,
+  id: string,
+  fixCount: number,
+  correctionStatus: string,
+  now: number,
+): Promise<void> {
+  await d1
+    .prepare(
+      "UPDATE articles SET fix_count = ?, correction_status = ?, updated_at = ? WHERE id = ?",
+    )
+    .bind(fixCount, correctionStatus, now, id)
+    .run();
+}
+
+/** Sets only the correction-capture state (e.g. mark 'pending' after a compare failure). */
+export async function setCorrectionStatus(
+  d1: D1Database,
+  id: string,
+  correctionStatus: string,
+  now: number,
+): Promise<void> {
+  await d1
+    .prepare("UPDATE articles SET correction_status = ?, updated_at = ? WHERE id = ?")
+    .bind(correctionStatus, now, id)
+    .run();
+}
