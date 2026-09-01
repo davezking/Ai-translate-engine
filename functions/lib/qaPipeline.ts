@@ -3,6 +3,7 @@ import { db, qaRetrievalTopN } from "./env";
 import { getArticle, setArticleQaDraft } from "./db/articles";
 import { listChunksByArticle } from "./db/chunks";
 import { getCurrentPrompt } from "./db/prompts";
+import { getStyleProfile } from "./db/styleProfiles";
 import { retrieveLessons, type RetrievedLesson } from "./retrieval";
 import { runQaPass } from "./qa";
 
@@ -13,6 +14,8 @@ export type QaOutcome =
       topN: number;
       lessons: RetrievedLesson[];
       retrievalError?: string;
+      /** Writer name of the style profile applied, or null if none was selected. */
+      styleApplied: string | null;
     }
   | { status: "failed"; error: unknown };
 
@@ -66,15 +69,28 @@ export async function runQaPipeline(env: Env, articleId: string): Promise<QaOutc
         `[${lessons.map((l) => `${l.correctionId}@${l.score.toFixed(3)}`).join(", ")}]`,
     );
 
+    // Selecting a style is optional (Requirement 15): no writer_style_id means
+    // QA runs with general judgement only, same as before Sprint 4.1.
+    let styleGuidelines: string | null = null;
+    let styleApplied: string | null = null;
+    if (article.writer_style_id) {
+      const profile = await getStyleProfile(d1, article.writer_style_id);
+      if (profile) {
+        styleGuidelines = profile.derived_guidelines;
+        styleApplied = profile.writer_name;
+      }
+    }
+
     const qaText = await runQaPass(env, {
       qaPromptBody: promptEntry.version.body,
       englishContext: article.source_english,
       machineAmharic,
       lessons,
+      styleGuidelines,
     });
 
     await setArticleQaDraft(d1, articleId, qaText, Date.now());
-    return { status: "qad", amharicDraft: qaText, topN, lessons, retrievalError };
+    return { status: "qad", amharicDraft: qaText, topN, lessons, retrievalError, styleApplied };
   } catch (err) {
     console.error(`QA pipeline failed for article ${articleId}:`, err);
     return { status: "failed", error: err };

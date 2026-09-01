@@ -10,6 +10,8 @@ export interface QaPassInput {
   machineAmharic: string;
   /** Past correction lessons retrieved from the library, best match first. */
   lessons: RetrievedLesson[];
+  /** Selected writer's derived tone/voice guidelines (Sprint 4.1), or null/undefined if none selected. */
+  styleGuidelines?: string | null;
 }
 
 /**
@@ -30,10 +32,21 @@ function renderLessons(lessons: RetrievedLesson[]): string {
 }
 
 function buildUserContent(input: QaPassInput): string {
-  return [
+  const sections = [
     "=== ENGLISH SOURCE (context, do not translate) ===",
     input.englishContext.trim(),
     "",
+  ];
+
+  if (input.styleGuidelines && input.styleGuidelines.trim()) {
+    sections.push(
+      "=== SELECTED WRITER'S TONE/VOICE GUIDELINES (apply throughout) ===",
+      input.styleGuidelines.trim(),
+      "",
+    );
+  }
+
+  sections.push(
     "=== LESSONS FROM PAST HUMAN REVIEWS ===",
     "These summarize corrections human reviewers made on earlier translations of",
     "similar material. Apply the ones that are relevant to the text below; ignore",
@@ -43,7 +56,9 @@ function buildUserContent(input: QaPassInput): string {
     "",
     "=== MACHINE AMHARIC TO QA (return your corrected version of THIS) ===",
     input.machineAmharic.trim(),
-  ].join("\n");
+  );
+
+  return sections.join("\n");
 }
 
 /**

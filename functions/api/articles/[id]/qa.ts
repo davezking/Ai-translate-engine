@@ -39,6 +39,7 @@ export const onRequestPost: PagesFunction<Env, string, AuthedData> = async (cont
       topicTag: l.topicTag,
       score: l.score,
     })),
+    styleApplied: outcome.styleApplied,
     ...(outcome.retrievalError ? { retrievalError: outcome.retrievalError } : {}),
   });
 };

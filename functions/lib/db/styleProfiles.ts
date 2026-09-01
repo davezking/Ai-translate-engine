@@ -7,6 +7,14 @@ export async function listStyleProfiles(d1: D1Database): Promise<StyleProfileRow
   return results;
 }
 
+export async function getStyleProfile(d1: D1Database, id: string): Promise<StyleProfileRow | null> {
+  const row = await d1
+    .prepare("SELECT * FROM styleProfiles WHERE id = ?")
+    .bind(id)
+    .first<StyleProfileRow>();
+  return row ?? null;
+}
+
 export async function createStyleProfile(
   d1: D1Database,
   input: {

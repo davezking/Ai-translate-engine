@@ -66,6 +66,19 @@ export async function setArticleQaDraft(
     .run();
 }
 
+/** Sets (or clears, with null) the selected writer style profile for QA (Sprint 4.1 Task 3). */
+export async function setArticleStyle(
+  d1: D1Database,
+  id: string,
+  writerStyleId: string | null,
+  now: number,
+): Promise<void> {
+  await d1
+    .prepare("UPDATE articles SET writer_style_id = ?, updated_at = ? WHERE id = ?")
+    .bind(writerStyleId, now, id)
+    .run();
+}
+
 /** Reviewer autosave: patches the working draft without touching status. */
 export async function patchArticleDraft(
   d1: D1Database,

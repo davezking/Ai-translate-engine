@@ -10,6 +10,28 @@ export interface ArticleDTO {
   updated_at: number;
 }
 
+export interface ApprovedStyleProfileDTO {
+  id: string;
+  writerName: string;
+}
+
+/** Lists approved style profiles (id + name only) for the operator's style-selection dropdown. */
+export function listApprovedStyleProfiles(): Promise<{ profiles: ApprovedStyleProfileDTO[] }> {
+  return fetch("/api/styles/approved").then((res) => asJson(res));
+}
+
+/** Selects (or clears, with null) the writer style applied at QA for this article. */
+export function setArticleStyle(
+  articleId: string,
+  writerStyleId: string | null,
+): Promise<{ writerStyleId: string | null; updatedAt: number }> {
+  return fetch(`/api/articles/${articleId}/style`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ writerStyleId }),
+  }).then((res) => asJson(res));
+}
+
 export interface ChunkDTO {
   id: string;
   article_id: string;
@@ -87,6 +109,7 @@ export interface QaResultDTO {
   topN: number;
   retrievedCorrectionIds: string[];
   lessons: { correctionId: string; topicTag: string | null; score: number }[];
+  styleApplied: string | null;
   retrievalError?: string;
 }
 
@@ -191,4 +214,107 @@ export interface FixMetricsDTO {
 
 export function getFixMetrics(): Promise<FixMetricsDTO> {
   return fetch("/api/metrics/fixes").then((res) => asJson(res));
+}
+
+export interface StyleProfileDTO {
+  id: string;
+  writerName: string;
+  sampleArticles: string[];
+  derivedGuidelines: string | null;
+  approved: boolean;
+  createdAt: number;
+}
+
+/** Admin-only: derives a style profile from one or more pasted writing samples. */
+export function createStyleProfile(
+  writerName: string,
+  sampleArticles: string[],
+): Promise<StyleProfileDTO> {
+  return fetch("/api/styles", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ writerName, sampleArticles }),
+  }).then((res) => asJson(res));
+}
+
+/** Admin-only: lists all style profiles, approved and unapproved. */
+export function listStyleProfiles(): Promise<{ profiles: StyleProfileDTO[] }> {
+  return fetch("/api/styles").then((res) => asJson(res));
+}
+
+/** Admin-only: flips a style profile to approved = ready for general use. */
+export function approveStyleProfile(id: string): Promise<{ id: string; approved: boolean }> {
+  return fetch(`/api/styles/${id}/approve`, { method: "PATCH" }).then((res) => asJson(res));
+}
+
+export interface StyleTestResultDTO {
+  withoutStyle: string;
+  withStyle: string;
+}
+
+/** Admin-only: runs the live QA prompt over a short test text with vs. without this profile's guidelines. */
+export function testStyleProfile(id: string, testText: string): Promise<StyleTestResultDTO> {
+  return fetch(`/api/styles/${id}/test`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ testText }),
+  }).then((res) => asJson(res));
+}
+
+export type PromptKey = "split" | "translate" | "qa";
+
+export const PROMPT_KEYS: PromptKey[] = ["split", "translate", "qa"];
+
+export interface CurrentPromptDTO {
+  key: PromptKey;
+  currentVersionId: string;
+  version: number;
+  body: string;
+  createdAt: number;
+}
+
+/** Admin-only: the prompt body the pipeline is currently running for this key. */
+export function getPrompt(key: PromptKey): Promise<CurrentPromptDTO> {
+  return fetch(`/api/prompts/${key}`).then((res) => asJson(res));
+}
+
+/** Admin-only: publishes a new immutable version and makes it current. */
+export function publishPrompt(key: PromptKey, body: string): Promise<CurrentPromptDTO> {
+  return fetch(`/api/prompts/${key}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ body }),
+  }).then((res) => asJson(res));
+}
+
+export interface PromptVersionDTO {
+  id: string;
+  version: number;
+  body: string;
+  /** Publishing user's email, falling back to their id if the user row is gone. */
+  author: string;
+  createdAt: number;
+}
+
+export interface PromptHistoryDTO {
+  key: PromptKey;
+  currentVersionId: string | null;
+  versions: PromptVersionDTO[];
+}
+
+/** Admin-only: full version history for a prompt, newest-first. */
+export function listPromptVersions(key: PromptKey): Promise<PromptHistoryDTO> {
+  return fetch(`/api/prompts/${key}/versions`).then((res) => asJson(res));
+}
+
+/**
+ * Admin-only: repoints the prompt at an existing version. Never deletes
+ * history — rolling forward again is the same call with a newer version id.
+ */
+export function rollbackPrompt(key: PromptKey, versionId: string): Promise<CurrentPromptDTO> {
+  return fetch(`/api/prompts/${key}/rollback`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ versionId }),
+  }).then((res) => asJson(res));
 }
