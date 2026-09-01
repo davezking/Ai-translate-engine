@@ -6,7 +6,7 @@
 
 INSERT INTO users (id, email, role) VALUES
   ('usr_admin', 'yegnatop10@gmail.com', 'admin'),
-  ('usr_reviewer', 'REPLACE_WITH_SECOND_USER_EMAIL', 'reviewer');
+  ('usr_reviewer', 'itzone04@gmail.com', 'reviewer');
 
 INSERT INTO prompts (key, current_version_id) VALUES
   ('split', NULL),
