@@ -5,6 +5,7 @@ import {
   getPrompt,
   listPromptVersions,
   publishPrompt,
+  rollbackPrompt,
   PROMPT_KEYS,
   type CurrentPromptDTO,
   type PromptHistoryDTO,
@@ -45,6 +46,7 @@ export default function PromptsAdmin() {
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
+  const [rollingBackId, setRollingBackId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refreshHistory = useCallback((k: PromptKey) => {
@@ -100,6 +102,22 @@ export default function PromptsAdmin() {
       toast(err instanceof Error ? err.message : "Failed to publish prompt", "err");
     } finally {
       setPublishing(false);
+    }
+  }
+
+  async function handleRollback(versionId: string, version: number) {
+    setRollingBackId(versionId);
+    try {
+      const rolled = await rollbackPrompt(key, versionId);
+      setCurrent(rolled);
+      setDraft(rolled.body);
+      setPreviewId(null);
+      await refreshHistory(key);
+      toast(`${LABELS[key].title} prompt now running v${version}.`);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Rollback failed", "err");
+    } finally {
+      setRollingBackId(null);
     }
   }
 
@@ -251,6 +269,31 @@ export default function PromptsAdmin() {
               <p className="hint" style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
                 {preview.body}
               </p>
+              <div className="row">
+                <span className="hint">
+                  {preview.id === history?.currentVersionId
+                    ? "This is the version the pipeline is running."
+                    : "Rollback repoints the pipeline here on its next run. Newer versions stay in history."}
+                </span>
+                <span className="spacer" />
+                {preview.id !== history?.currentVersionId && (
+                  <button
+                    className="btn"
+                    onClick={() => handleRollback(preview.id, preview.version)}
+                    disabled={rollingBackId !== null || publishing}
+                  >
+                    {rollingBackId === preview.id ? (
+                      <>
+                        <span className="spin" /> Rolling back…
+                      </>
+                    ) : (
+                      <>
+                        <Icon name="undo" /> Roll back to v{preview.version}
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>

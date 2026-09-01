@@ -70,7 +70,24 @@ export async function publishPromptVersion(
   ]);
 }
 
-/** Rollback = repoint current_version_id at an existing version. No history is deleted. */
+/** Fetches one version by id — used to validate a rollback target before repointing. */
+export async function getPromptVersion(
+  d1: D1Database,
+  id: string,
+): Promise<PromptVersionRow | null> {
+  const row = await d1
+    .prepare("SELECT * FROM promptVersions WHERE id = ?")
+    .bind(id)
+    .first<PromptVersionRow>();
+  return row ?? null;
+}
+
+/**
+ * Rollback = repoint current_version_id at an existing version. No history is
+ * deleted and no body is touched, so rolling forward again is the same call
+ * with a newer version id. Callers must confirm the target belongs to `key`
+ * first (see getPromptVersion) — this only writes the pointer.
+ */
 export async function rollbackPrompt(
   d1: D1Database,
   key: PromptKey,

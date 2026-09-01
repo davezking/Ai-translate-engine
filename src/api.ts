@@ -306,3 +306,15 @@ export interface PromptHistoryDTO {
 export function listPromptVersions(key: PromptKey): Promise<PromptHistoryDTO> {
   return fetch(`/api/prompts/${key}/versions`).then((res) => asJson(res));
 }
+
+/**
+ * Admin-only: repoints the prompt at an existing version. Never deletes
+ * history — rolling forward again is the same call with a newer version id.
+ */
+export function rollbackPrompt(key: PromptKey, versionId: string): Promise<CurrentPromptDTO> {
+  return fetch(`/api/prompts/${key}/rollback`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ versionId }),
+  }).then((res) => asJson(res));
+}
