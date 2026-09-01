@@ -192,3 +192,29 @@ export interface FixMetricsDTO {
 export function getFixMetrics(): Promise<FixMetricsDTO> {
   return fetch("/api/metrics/fixes").then((res) => asJson(res));
 }
+
+export interface StyleProfileDTO {
+  id: string;
+  writerName: string;
+  sampleArticles: string[];
+  derivedGuidelines: string | null;
+  approved: boolean;
+  createdAt: number;
+}
+
+/** Admin-only: derives a style profile from one or more pasted writing samples. */
+export function createStyleProfile(
+  writerName: string,
+  sampleArticles: string[],
+): Promise<StyleProfileDTO> {
+  return fetch("/api/styles", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ writerName, sampleArticles }),
+  }).then((res) => asJson(res));
+}
+
+/** Admin-only: lists all style profiles, approved and unapproved. */
+export function listStyleProfiles(): Promise<{ profiles: StyleProfileDTO[] }> {
+  return fetch("/api/styles").then((res) => asJson(res));
+}
