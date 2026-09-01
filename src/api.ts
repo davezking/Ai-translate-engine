@@ -286,3 +286,23 @@ export function publishPrompt(key: PromptKey, body: string): Promise<CurrentProm
     body: JSON.stringify({ body }),
   }).then((res) => asJson(res));
 }
+
+export interface PromptVersionDTO {
+  id: string;
+  version: number;
+  body: string;
+  /** Publishing user's email, falling back to their id if the user row is gone. */
+  author: string;
+  createdAt: number;
+}
+
+export interface PromptHistoryDTO {
+  key: PromptKey;
+  currentVersionId: string | null;
+  versions: PromptVersionDTO[];
+}
+
+/** Admin-only: full version history for a prompt, newest-first. */
+export function listPromptVersions(key: PromptKey): Promise<PromptHistoryDTO> {
+  return fetch(`/api/prompts/${key}/versions`).then((res) => asJson(res));
+}

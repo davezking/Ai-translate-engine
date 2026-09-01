@@ -55,13 +55,25 @@ export const onRequestPut: PagesFunction<Env, string, AuthedData> = async (conte
   const d1 = db(context.env);
   const id = crypto.randomUUID();
   const now = Date.now();
-  await publishPromptVersion(d1, {
-    id,
-    key,
-    body: promptBody,
-    author: context.data.user.id,
-    now,
-  });
+  try {
+    await publishPromptVersion(d1, {
+      id,
+      key,
+      body: promptBody,
+      author: context.data.user.id,
+      now,
+    });
+  } catch (err) {
+    // The UNIQUE (prompt_key, version) constraint is what makes a concurrent
+    // publish fail instead of overwriting history; surface it as a retryable
+    // conflict rather than an opaque 500. Nothing was written — d1.batch is
+    // one transaction.
+    console.error(`Publishing ${key} prompt failed:`, err);
+    return Response.json(
+      { error: "Could not publish: another version was published concurrently. Retry." },
+      { status: 409 },
+    );
+  }
 
   const entry = await getCurrentPrompt(d1, key);
   return Response.json(
