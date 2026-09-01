@@ -10,6 +10,28 @@ export interface ArticleDTO {
   updated_at: number;
 }
 
+export interface ApprovedStyleProfileDTO {
+  id: string;
+  writerName: string;
+}
+
+/** Lists approved style profiles (id + name only) for the operator's style-selection dropdown. */
+export function listApprovedStyleProfiles(): Promise<{ profiles: ApprovedStyleProfileDTO[] }> {
+  return fetch("/api/styles/approved").then((res) => asJson(res));
+}
+
+/** Selects (or clears, with null) the writer style applied at QA for this article. */
+export function setArticleStyle(
+  articleId: string,
+  writerStyleId: string | null,
+): Promise<{ writerStyleId: string | null; updatedAt: number }> {
+  return fetch(`/api/articles/${articleId}/style`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ writerStyleId }),
+  }).then((res) => asJson(res));
+}
+
 export interface ChunkDTO {
   id: string;
   article_id: string;
@@ -87,6 +109,7 @@ export interface QaResultDTO {
   topN: number;
   retrievedCorrectionIds: string[];
   lessons: { correctionId: string; topicTag: string | null; score: number }[];
+  styleApplied: string | null;
   retrievalError?: string;
 }
 

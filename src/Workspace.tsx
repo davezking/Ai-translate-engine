@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  type ApprovedStyleProfileDTO,
   type ArticleDTO,
   type ChunkDTO,
   getArticle,
+  listApprovedStyleProfiles,
   listChunks,
   reassemble,
   saveChunkBoundaries,
+  setArticleStyle,
   splitArticle,
   translateChunk,
 } from "./api";
@@ -68,6 +71,14 @@ export default function Workspace({
   const [savedChunks, setSavedChunks] = useState<WorkingChunk[]>([]);
   const [proposedChunks, setProposedChunks] = useState<WorkingChunk[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [approvedStyles, setApprovedStyles] = useState<ApprovedStyleProfileDTO[]>([]);
+  const [savingStyle, setSavingStyle] = useState(false);
+
+  useEffect(() => {
+    listApprovedStyleProfiles()
+      .then((r) => setApprovedStyles(r.profiles))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,6 +124,24 @@ export default function Workspace({
     }
   }
 
+  async function handleStyleChange(value: string) {
+    const writerStyleId = value || null;
+    setSavingStyle(true);
+    try {
+      await setArticleStyle(articleId, writerStyleId);
+      setArticle((a) => (a ? { ...a, writer_style_id: writerStyleId } : a));
+      toast(
+        writerStyleId
+          ? `Style set to "${approvedStyles.find((s) => s.id === writerStyleId)?.writerName ?? ""}" — applies on the next QA run.`
+          : "Style cleared — QA runs with general judgement only.",
+      );
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Failed to set style", "err");
+    } finally {
+      setSavingStyle(false);
+    }
+  }
+
   const splitDone = stage === "translate" || stage === "review";
   const translateDone =
     chunks.length > 0 && chunks.every((c) => c.status === "translated" && c.amharicText);
@@ -145,6 +174,27 @@ export default function Workspace({
           </div>
         </div>
         <div className="actions">
+          {approvedStyles.length > 0 && (
+            <div className="field" style={{ gap: 3 }}>
+              <label className="label" htmlFor="workspace-style">
+                Writer style
+              </label>
+              <select
+                id="workspace-style"
+                className="select"
+                value={article.writer_style_id ?? ""}
+                onChange={(e) => handleStyleChange(e.target.value)}
+                disabled={savingStyle || finalized}
+              >
+                <option value="">No style (general QA)</option>
+                {approvedStyles.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.writerName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <button className="btn" onClick={onBack}>
             <Icon name="back" /> All articles
           </button>
