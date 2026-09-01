@@ -25,3 +25,11 @@ export async function listCorrections(d1: D1Database): Promise<CorrectionRow[]> 
     .all<CorrectionRow>();
   return results;
 }
+
+/** Running total of stored corrections, for the seed-intake batch UI. */
+export async function countCorrections(d1: D1Database): Promise<number> {
+  const row = await d1
+    .prepare("SELECT COUNT(*) AS count FROM corrections")
+    .first<{ count: number }>();
+  return row?.count ?? 0;
+}

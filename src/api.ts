@@ -64,13 +64,15 @@ export function translateChunk(
   articleId: string,
   ord: number,
 ): Promise<{ chunk: ChunkDTO; skipped: boolean }> {
-  return fetch(`/api/articles/${articleId}/chunks/${ord}/translate`, { method: "POST" }).then((res) =>
-    asJson(res),
+  return fetch(`/api/articles/${articleId}/chunks/${ord}/translate`, { method: "POST" }).then(
+    (res) => asJson(res),
   );
 }
 
 export function reassemble(articleId: string): Promise<{ amharicDraft: string }> {
-  return fetch(`/api/articles/${articleId}/reassemble`, { method: "POST" }).then((res) => asJson(res));
+  return fetch(`/api/articles/${articleId}/reassemble`, { method: "POST" }).then((res) =>
+    asJson(res),
+  );
 }
 
 export function patchDraft(
@@ -93,4 +95,62 @@ export function finalizeArticle(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ amharicText }),
   }).then((res) => asJson(res));
+}
+
+export interface WhoAmIDTO {
+  user: { id: string; email: string; role: "admin" | "reviewer" };
+}
+
+/** 403s for a non-admin — used to gate the seed-intake nav entry client-side. */
+export function whoami(): Promise<WhoAmIDTO> {
+  return fetch("/api/admin/whoami").then((res) => asJson(res));
+}
+
+export interface SeedTriple {
+  englishSource: string;
+  aiTranslation: string;
+  humanFinal: string;
+}
+
+export interface SeedResultDTO {
+  ok: boolean;
+  articleId?: string;
+  status?: "captured" | "skipped" | "pending";
+  fixCount?: number;
+  error?: string;
+}
+
+/**
+ * Never throws — a request or server failure resolves as { ok: false, error },
+ * so the batch-mode loop in SeedIntake can log per-item failures and continue
+ * without a try/catch around every call.
+ */
+export async function submitSeed(triple: SeedTriple): Promise<SeedResultDTO> {
+  try {
+    const res = await fetch("/api/seed", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(triple),
+    });
+    const data = (await res.json()) as {
+      articleId?: string;
+      status?: SeedResultDTO["status"];
+      fixCount?: number;
+      error?: string;
+    };
+    if (!res.ok) {
+      return {
+        ok: false,
+        articleId: data.articleId,
+        error: data.error ?? `Request failed (${res.status})`,
+      };
+    }
+    return { ok: true, articleId: data.articleId, status: data.status, fixCount: data.fixCount };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Network error" };
+  }
+}
+
+export function getSeedCount(): Promise<{ count: number }> {
+  return fetch("/api/seed").then((res) => asJson(res));
 }
