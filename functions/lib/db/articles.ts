@@ -44,20 +44,25 @@ export async function setArticleDraft(
 }
 
 /**
- * Stores the QA pass output as the working draft and moves the article to the
- * 'qad' state (pipeline: drafted -> qad -> review -> final). This is the draft
- * the Phase 2 reviewer then edits. QA runs before human review, so no reviewer
- * edits exist to lose here (Hard rule 5).
+ * Stores the QA pass output as the working draft AND as the immutable
+ * amharic_qa snapshot, and moves the article to the 'qad' state (pipeline:
+ * drafted -> qad -> review -> final). amharic_draft is what the Phase 2
+ * reviewer edits (and autosave overwrites); amharic_qa is never touched again,
+ * so finalize-compare has a faithful pre-edit machine side to compare against
+ * (migration 0006). QA runs before human review, so no reviewer edits exist to
+ * lose here (Hard rule 5).
  */
 export async function setArticleQaDraft(
   d1: D1Database,
   id: string,
-  amharicDraft: string,
+  amharicText: string,
   now: number,
 ): Promise<void> {
   await d1
-    .prepare("UPDATE articles SET amharic_draft = ?, status = 'qad', updated_at = ? WHERE id = ?")
-    .bind(amharicDraft, now, id)
+    .prepare(
+      "UPDATE articles SET amharic_draft = ?, amharic_qa = ?, status = 'qad', updated_at = ? WHERE id = ?",
+    )
+    .bind(amharicText, amharicText, now, id)
     .run();
 }
 

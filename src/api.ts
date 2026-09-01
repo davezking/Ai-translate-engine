@@ -69,7 +69,14 @@ export function translateChunk(
   );
 }
 
-export function reassemble(articleId: string): Promise<{ amharicDraft: string }> {
+export interface ReassembleResultDTO {
+  amharicDraft: string;
+  /** true if the QA pass ran and amharicDraft is its output; false if QA failed and this is the raw reassembled draft. */
+  qa: boolean;
+  qaError?: string;
+}
+
+export function reassemble(articleId: string): Promise<ReassembleResultDTO> {
   return fetch(`/api/articles/${articleId}/reassemble`, { method: "POST" }).then((res) =>
     asJson(res),
   );

@@ -35,6 +35,8 @@ export interface ArticleRow {
   source_english: string;
   amharic_draft: string | null;
   amharic_final: string | null;
+  /** Immutable QA-pass output, set once per QA run; never touched by reviewer autosave (migration 0006). */
+  amharic_qa: string | null;
   status: string;
   writer_style_id: string | null;
   fix_count: number | null;

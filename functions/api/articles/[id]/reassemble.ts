@@ -2,9 +2,17 @@ import type { Env } from "../../../lib/env";
 import { db } from "../../../lib/env";
 import { setArticleDraft } from "../../../lib/db/articles";
 import { listChunksByArticle } from "../../../lib/db/chunks";
+import { runQaPipeline } from "../../../lib/qaPipeline";
 import type { AuthedData } from "../../_middleware";
 
-/** Concatenates translated chunks in order into articles.amharic_draft; refuses if any chunk is unfinished. */
+/**
+ * Concatenates translated chunks in order into articles.amharic_draft, refuses
+ * if any chunk is unfinished, then automatically triggers the QA pass
+ * (Sprint 3.2: reassemble -> QA -> review, no manual step in between). QA
+ * failure is non-blocking — the reassembled draft stands and the reviewer can
+ * still proceed; the response flags the failure via qaError instead of losing
+ * pipeline progress.
+ */
 export const onRequestPost: PagesFunction<Env, string, AuthedData> = async (context) => {
   const articleId = context.params.id as string;
   const chunks = await listChunksByArticle(db(context.env), articleId);
@@ -27,5 +35,14 @@ export const onRequestPost: PagesFunction<Env, string, AuthedData> = async (cont
   const draft = chunks.map((c) => c.amharic_text as string).join("\n\n");
   await setArticleDraft(db(context.env), articleId, draft, Date.now());
 
-  return Response.json({ amharicDraft: draft });
+  const qaOutcome = await runQaPipeline(context.env, articleId);
+  if (qaOutcome.status === "qad") {
+    return Response.json({ amharicDraft: qaOutcome.amharicDraft, qa: true });
+  }
+
+  return Response.json({
+    amharicDraft: draft,
+    qa: false,
+    qaError: qaOutcome.error instanceof Error ? qaOutcome.error.message : "QA failed",
+  });
 };

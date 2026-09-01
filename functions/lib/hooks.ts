@@ -21,16 +21,19 @@ export async function onArticleFinalized(env: Env, articleId: string): Promise<v
     const article = await getArticle(d1, articleId);
     if (!article || !article.amharic_final) return;
 
-    // Comparison source = the pre-edit machine translation. amharic_draft is NOT
-    // used: reviewer autosave overwrites it, so it no longer holds the machine
-    // output by finalize time. The chunks' amharic_text is untouched by the
-    // editor, so reassembling it reproduces the machine translation. Sprint 3.2
-    // swaps in the true QA output via runCompareAndCapture's machineAmharic param.
-    const chunks = await listChunksByArticle(d1, articleId);
-    const machineAmharic = chunks
-      .map((c) => c.amharic_text ?? "")
-      .filter((t) => t.trim())
-      .join("\n\n");
+    // Comparison source = the QA output (Sprint 3.2), read from amharic_qa —
+    // never amharic_draft, which reviewer autosave overwrites and so no longer
+    // holds the pre-edit machine output by finalize time. Falls back to
+    // reassembling the raw chunk translations for an article finalized before
+    // QA ran or when QA failed, so finalize never blocks on QA having succeeded.
+    let machineAmharic = article.amharic_qa ?? "";
+    if (!machineAmharic.trim()) {
+      const chunks = await listChunksByArticle(d1, articleId);
+      machineAmharic = chunks
+        .map((c) => c.amharic_text ?? "")
+        .filter((t) => t.trim())
+        .join("\n\n");
+    }
 
     if (!machineAmharic.trim()) {
       // No machine text to compare against — nothing to learn from.
