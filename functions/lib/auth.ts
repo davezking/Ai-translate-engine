@@ -111,19 +111,57 @@ function getCookie(request: Request, name: string): string | null {
 }
 
 /**
+ * Hostnames only reachable from the machine running `wrangler pages dev`.
+ * A deployed Pages project is served on *.pages.dev or a custom domain, and
+ * Cloudflare only routes a request to it when the Host matches a hostname
+ * bound to the project — so a deployment cannot satisfy this.
+ */
+function isLocalRequest(request: Request): boolean {
+  let hostname: string;
+  try {
+    hostname = new URL(request.url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return (
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1" ||
+    hostname === "[::1]"
+  );
+}
+
+/**
  * Resolves the Access-authenticated email for a request, or null if unauthenticated.
+ *
  * Falls back to env.DEV_BYPASS_EMAIL only when ACCESS_TEAM_DOMAIN/ACCESS_AUD are
- * unset — i.e. only in local dev, since a deployed environment must configure both.
+ * unset AND the request arrived on a local hostname. Both conditions matter: a
+ * deployed environment that is missing the ACCESS_* vars — a Pages preview that
+ * did not inherit them, say — would otherwise serve every /api/* route as the
+ * bypass identity to anyone on the internet, with admin rights and no signal
+ * that it was happening. The host check makes that fail closed and loud
+ * instead of relying on DEV_BYPASS_EMAIL never being set outside .dev.vars.
  */
 export async function resolveAccessEmail(request: Request, env: Env): Promise<string | null> {
   const teamDomain = env.ACCESS_TEAM_DOMAIN;
   const aud = env.ACCESS_AUD;
 
   if (!teamDomain || !aud) {
-    return env.DEV_BYPASS_EMAIL ?? null;
+    if (!env.DEV_BYPASS_EMAIL) return null;
+    if (!isLocalRequest(request)) {
+      console.error(
+        "Refusing DEV_BYPASS_EMAIL: ACCESS_TEAM_DOMAIN/ACCESS_AUD are unset on a non-local " +
+          "host, so this environment has no authentication configured. Set both on it, and " +
+          "never set DEV_BYPASS_EMAIL outside a local .dev.vars.",
+      );
+      return null;
+    }
+    return env.DEV_BYPASS_EMAIL;
   }
 
-  const token = request.headers.get("Cf-Access-Jwt-Assertion") ?? getCookie(request, "CF_Authorization");
+  const token =
+    request.headers.get("Cf-Access-Jwt-Assertion") ?? getCookie(request, "CF_Authorization");
   if (!token) return null;
 
   return verifyAccessJwt(token, teamDomain, aud);
