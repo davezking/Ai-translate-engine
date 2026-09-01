@@ -43,6 +43,24 @@ export async function setArticleDraft(
     .run();
 }
 
+/**
+ * Stores the QA pass output as the working draft and moves the article to the
+ * 'qad' state (pipeline: drafted -> qad -> review -> final). This is the draft
+ * the Phase 2 reviewer then edits. QA runs before human review, so no reviewer
+ * edits exist to lose here (Hard rule 5).
+ */
+export async function setArticleQaDraft(
+  d1: D1Database,
+  id: string,
+  amharicDraft: string,
+  now: number,
+): Promise<void> {
+  await d1
+    .prepare("UPDATE articles SET amharic_draft = ?, status = 'qad', updated_at = ? WHERE id = ?")
+    .bind(amharicDraft, now, id)
+    .run();
+}
+
 /** Reviewer autosave: patches the working draft without touching status. */
 export async function patchArticleDraft(
   d1: D1Database,

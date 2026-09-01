@@ -1,5 +1,6 @@
 import type { Env } from "./env";
-import { ai, vectorize, db, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS } from "./env";
+import { vectorize, db } from "./env";
+import { embedText } from "./embeddings";
 import { insertCorrection } from "./db/corrections";
 
 export interface CaptureInput {
@@ -13,30 +14,6 @@ export interface CaptureResult {
   vectorId: string;
 }
 
-interface EmbeddingResponse {
-  data?: number[][];
-}
-
-/**
- * Embeds text with Workers AI and returns the vector, failing loudly if its
- * dimension doesn't match the Vectorize index. A mismatch is never silently
- * inserted — Vectorize would reject or corrupt the index, so we stop here.
- */
-async function embedSummary(env: Env, text: string): Promise<number[]> {
-  const res = (await ai(env).run(EMBEDDING_MODEL, { text })) as EmbeddingResponse;
-  const values = res?.data?.[0];
-  if (!Array.isArray(values) || values.length === 0) {
-    throw new Error("Workers AI returned no embedding vector");
-  }
-  if (values.length !== EMBEDDING_DIMENSIONS) {
-    throw new Error(
-      `Embedding dimension mismatch: model ${EMBEDDING_MODEL} returned ${values.length}, ` +
-        `but the Vectorize index expects ${EMBEDDING_DIMENSIONS}. Refusing to insert.`,
-    );
-  }
-  return values;
-}
-
 /**
  * Stores one correction so it becomes retrievable: embeds the change summary,
  * upserts the vector into Vectorize, and writes the matching D1 corrections row
@@ -48,7 +25,7 @@ async function embedSummary(env: Env, text: string): Promise<number[]> {
  * nothing is persisted at all. Either way the caller can retry cleanly.
  */
 export async function captureCorrection(env: Env, input: CaptureInput): Promise<CaptureResult> {
-  const values = await embedSummary(env, input.changeSummary);
+  const values = await embedText(env, input.changeSummary);
 
   const vectorId = crypto.randomUUID();
   const correctionId = crypto.randomUUID();

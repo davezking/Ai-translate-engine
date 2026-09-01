@@ -75,6 +75,19 @@ export function reassemble(articleId: string): Promise<{ amharicDraft: string }>
   );
 }
 
+export interface QaResultDTO {
+  amharicDraft: string;
+  topN: number;
+  retrievedCorrectionIds: string[];
+  lessons: { correctionId: string; topicTag: string | null; score: number }[];
+  retrievalError?: string;
+}
+
+/** Runs the QA pass (retrieve lessons + Gemini) and returns the QA'd draft. */
+export function qaArticle(articleId: string): Promise<QaResultDTO> {
+  return fetch(`/api/articles/${articleId}/qa`, { method: "POST" }).then((res) => asJson(res));
+}
+
 export function patchDraft(
   articleId: string,
   amharicText: string,
