@@ -3,7 +3,9 @@ import type { Env } from "./env";
 interface AccessJwtPayload {
   email?: string;
   aud?: string[] | string;
+  iss?: string;
   exp?: number;
+  nbf?: number;
 }
 
 interface Jwk {
@@ -15,6 +17,18 @@ interface Jwk {
 
 let cachedJwks: { keys: Jwk[]; fetchedAt: number } | null = null;
 const JWKS_TTL_MS = 60 * 60 * 1000;
+/**
+ * Floor between *forced* refetches, not between fetches. Without a floor, a
+ * forged token carrying a random kid would drive one fetch of the certs
+ * endpoint per request. Keyed off the last forced refresh rather than the
+ * cache's age so that a rotation is still picked up immediately — throttling
+ * on cache age would have made a rotation invisible for the first five
+ * minutes after any ordinary fetch.
+ */
+const JWKS_MIN_REFRESH_MS = 5 * 60 * 1000;
+let lastForcedRefreshAt = 0;
+/** Clock-skew allowance for nbf. Not applied to exp, which stays strict. */
+const CLOCK_SKEW_MS = 60 * 1000;
 
 function base64UrlDecode(input: string): Uint8Array {
   const padded = input
@@ -31,16 +45,31 @@ function base64UrlDecodeToString(input: string): string {
   return new TextDecoder().decode(base64UrlDecode(input));
 }
 
-async function getJwks(teamDomain: string): Promise<Jwk[]> {
+async function getJwks(teamDomain: string, forceRefresh = false): Promise<Jwk[]> {
   const now = Date.now();
   if (cachedJwks && now - cachedJwks.fetchedAt < JWKS_TTL_MS) {
-    return cachedJwks.keys;
+    if (!forceRefresh) return cachedJwks.keys;
+    if (now - lastForcedRefreshAt < JWKS_MIN_REFRESH_MS) return cachedJwks.keys;
+    lastForcedRefreshAt = now;
   }
   const res = await fetch(`https://${teamDomain}/cdn-cgi/access/certs`);
   if (!res.ok) throw new Error(`Failed to fetch Access certs: ${res.status}`);
   const data = await res.json<{ keys: Jwk[] }>();
   cachedJwks = { keys: data.keys, fetchedAt: now };
   return data.keys;
+}
+
+/**
+ * The issuer Access stamps on its tokens, from the configured team domain.
+ * Tolerates a team domain given with a scheme or a trailing slash, so a
+ * slightly-off env var cannot silently reject every valid token.
+ */
+function expectedIssuer(teamDomain: string): string {
+  const host = teamDomain
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/+$/, "");
+  return `https://${host}`;
 }
 
 async function importJwk(jwk: Jwk): Promise<CryptoKey> {
@@ -54,8 +83,8 @@ async function importJwk(jwk: Jwk): Promise<CryptoKey> {
 }
 
 /**
- * Verifies a Cloudflare Access JWT's signature, audience, and expiry.
- * Returns the authenticated email on success, or null on any failure —
+ * Verifies a Cloudflare Access JWT's signature, audience, issuer, and validity
+ * window. Returns the authenticated email on success, or null on any failure —
  * never throws, so a malformed/forged token always fails closed.
  */
 export async function verifyAccessJwt(
@@ -79,12 +108,23 @@ export async function verifyAccessJwt(
 
   const audience = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
   if (!audience.includes(aud)) return null;
-  if (!payload.exp || payload.exp * 1000 < Date.now()) return null;
+  // Issuer binds the token to the configured team on top of the signature.
+  if (payload.iss !== expectedIssuer(teamDomain)) return null;
+  const now = Date.now();
+  if (!payload.exp || payload.exp * 1000 < now) return null;
+  if (payload.nbf !== undefined && payload.nbf * 1000 - CLOCK_SKEW_MS > now) return null;
   if (!payload.email) return null;
 
   try {
-    const jwks = await getJwks(teamDomain);
-    const jwk = jwks.find((k) => k.kid === header.kid);
+    let jwks = await getJwks(teamDomain);
+    let jwk = jwks.find((k) => k.kid === header.kid);
+    if (!jwk) {
+      // An unknown kid usually means Access rotated its signing keys since we
+      // cached them. Refetch once (rate-limited) rather than 401ing everyone
+      // until the hour-long TTL expires.
+      jwks = await getJwks(teamDomain, true);
+      jwk = jwks.find((k) => k.kid === header.kid);
+    }
     if (!jwk) return null;
 
     const key = await importJwk(jwk);

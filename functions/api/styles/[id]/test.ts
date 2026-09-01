@@ -4,6 +4,7 @@ import { requireAdmin } from "../../../lib/requireAdmin";
 import { getStyleProfile } from "../../../lib/db/styleProfiles";
 import { getCurrentPrompt } from "../../../lib/db/prompts";
 import { runQaPass } from "../../../lib/qa";
+import { enforceMaxLength, MAX_TEST_TEXT_CHARS } from "../../../lib/limits";
 import type { AuthedData } from "../../_middleware";
 
 /**
@@ -27,6 +28,8 @@ export const onRequestPost: PagesFunction<Env, string, AuthedData> = async (cont
   if (!testText) {
     return Response.json({ error: "testText is required" }, { status: 400 });
   }
+  const tooLong = enforceMaxLength("testText", testText, MAX_TEST_TEXT_CHARS);
+  if (tooLong) return tooLong;
 
   const promptEntry = await getCurrentPrompt(d1, "qa");
   if (!promptEntry) {

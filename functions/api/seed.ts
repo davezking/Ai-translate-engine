@@ -1,6 +1,7 @@
 import type { Env } from "../lib/env";
 import { db } from "../lib/env";
 import { requireAdmin } from "../lib/requireAdmin";
+import { enforceMaxLength, MAX_ARTICLE_CHARS } from "../lib/limits";
 import { createSeedArticle } from "../lib/db/articles";
 import { countCorrections } from "../lib/db/corrections";
 import { runCompareAndCapture } from "../lib/correctionCapture";
@@ -32,6 +33,14 @@ export const onRequestPost: PagesFunction<Env, string, AuthedData> = async (cont
       { error: "englishSource, aiTranslation, and humanFinal are all required" },
       { status: 400 },
     );
+  }
+  for (const [field, value] of [
+    ["englishSource", englishSource],
+    ["aiTranslation", aiTranslation],
+    ["humanFinal", humanFinal],
+  ] as const) {
+    const tooLong = enforceMaxLength(field, value, MAX_ARTICLE_CHARS);
+    if (tooLong) return tooLong;
   }
 
   const d1 = db(context.env);
