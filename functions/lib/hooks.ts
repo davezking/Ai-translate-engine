@@ -3,19 +3,20 @@ import { db } from "./env";
 import { getArticle, recordCompareResult, setCorrectionStatus } from "./db/articles";
 import { listChunksByArticle } from "./db/chunks";
 import { compareTranslations } from "./compare";
+import { captureCorrection } from "./capture";
 
 /**
  * Called once an article has been finalized. Runs the Gemini finalize compare
- * (machine/QA Amharic vs human-final) and stores the fix count on the article.
+ * (machine/QA Amharic vs human-final), stores the fix count, and captures the
+ * correction into the retrieval library (embed + Vectorize + D1 corrections row).
  *
- * Finalize must never fail because of this: any Gemini/compare error is caught
- * and the article is marked correction_status = 'pending' so capture can be
- * retried. The correction row + Vectorize embedding are written by the
- * store+embed step, which flips 'pending' -> 'captured'.
+ * Finalize must never fail because of this: any Gemini/embed/store error is
+ * caught and the article is left correction_status = 'pending' so capture can
+ * be retried. A successful capture flips it to 'captured'; an article with no
+ * meaningful change is marked 'skipped' and stores nothing.
  */
 export async function onArticleFinalized(env: Env, articleId: string): Promise<void> {
   const d1 = db(env);
-  const now = Date.now();
 
   try {
     const article = await getArticle(d1, articleId);
@@ -34,7 +35,7 @@ export async function onArticleFinalized(env: Env, articleId: string): Promise<v
 
     if (!machineAmharic.trim()) {
       // No machine text to compare against — nothing to learn from.
-      await setCorrectionStatus(d1, articleId, "skipped", now);
+      await setCorrectionStatus(d1, articleId, "skipped", Date.now());
       return;
     }
 
@@ -44,12 +45,24 @@ export async function onArticleFinalized(env: Env, articleId: string): Promise<v
       humanFinalAmharic: article.amharic_final,
     });
 
-    // Store the fix count now; store+embed (next task) writes the correction
-    // row + vector and flips this to 'captured', so capture stays 'pending'.
-    await recordCompareResult(d1, articleId, result.fixCount, "pending", now);
+    if (result.fixCount === 0) {
+      // The human made no meaningful change — no lesson to store or embed.
+      await recordCompareResult(d1, articleId, result.fixCount, "skipped", Date.now());
+      return;
+    }
+
+    // Store the fix count and mark pending, then capture. If capture throws,
+    // the catch below leaves it 'pending' (fix_count already stored) for retry.
+    await recordCompareResult(d1, articleId, result.fixCount, "pending", Date.now());
+    await captureCorrection(env, {
+      articleId,
+      changeSummary: result.changeSummary,
+      topicTag: result.topicTag,
+    });
+    await setCorrectionStatus(d1, articleId, "captured", Date.now());
   } catch (err) {
     // Never break finalize. Leave fix_count as-is and mark capture retryable.
-    await setCorrectionStatus(d1, articleId, "pending", now).catch(() => {});
+    await setCorrectionStatus(d1, articleId, "pending", Date.now()).catch(() => {});
     console.error(`Correction capture deferred for article ${articleId}:`, err);
   }
 }
