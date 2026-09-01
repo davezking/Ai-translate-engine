@@ -174,3 +174,21 @@ export async function submitSeed(triple: SeedTriple): Promise<SeedResultDTO> {
 export function getSeedCount(): Promise<{ count: number }> {
   return fetch("/api/seed").then((res) => asJson(res));
 }
+
+export interface FixMetricPoint {
+  articleId: string;
+  /** null = compare hasn't run yet or the article predates the correction library; distinct from 0 ("no fixes"). */
+  fixCount: number | null;
+  correctionStatus: string | null;
+  finalizedAt: number;
+}
+
+export interface FixMetricsDTO {
+  points: FixMetricPoint[];
+  baselineDays: number;
+  baselineEndsAt: number | null;
+}
+
+export function getFixMetrics(): Promise<FixMetricsDTO> {
+  return fetch("/api/metrics/fixes").then((res) => asJson(res));
+}

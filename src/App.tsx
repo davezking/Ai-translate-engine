@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Icon from "./Icon";
+import MetricsView from "./MetricsView";
 import PasteForm from "./PasteForm";
 import SeedIntake from "./SeedIntake";
 import { Toasts } from "./toast";
@@ -15,15 +16,21 @@ function isSeedRoute(): boolean {
   return window.location.hash === "#/seed";
 }
 
+function isMetricsRoute(): boolean {
+  return window.location.hash === "#/metrics";
+}
+
 export default function App() {
   const [articleId, setArticleId] = useState<string | null>(() => getArticleIdFromHash());
   const [onSeedRoute, setOnSeedRoute] = useState(() => isSeedRoute());
+  const [onMetricsRoute, setOnMetricsRoute] = useState(() => isMetricsRoute());
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const onHashChange = () => {
       setArticleId(getArticleIdFromHash());
       setOnSeedRoute(isSeedRoute());
+      setOnMetricsRoute(isMetricsRoute());
     };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
@@ -44,11 +51,17 @@ export default function App() {
     window.location.hash = "";
     setArticleId(null);
     setOnSeedRoute(false);
+    setOnMetricsRoute(false);
   }
 
   function handleSeedNav() {
     window.location.hash = "#/seed";
     setOnSeedRoute(true);
+  }
+
+  function handleMetricsNav() {
+    window.location.hash = "#/metrics";
+    setOnMetricsRoute(true);
   }
 
   return (
@@ -67,6 +80,11 @@ export default function App() {
           New article
         </button>
 
+        <button className="btn" style={{ width: "100%", marginTop: 8 }} onClick={handleMetricsNav}>
+          <Icon name="trend" />
+          Fixes trend
+        </button>
+
         {isAdmin && (
           <button className="btn" style={{ width: "100%", marginTop: 8 }} onClick={handleSeedNav}>
             <Icon name="doc" />
@@ -82,12 +100,22 @@ export default function App() {
               Articles
             </span>
             <span className="sep">/</span>
-            <b>{onSeedRoute ? "Seed intake" : articleId ? "Workspace" : "New article"}</b>
+            <b>
+              {onSeedRoute
+                ? "Seed intake"
+                : onMetricsRoute
+                  ? "Fixes trend"
+                  : articleId
+                    ? "Workspace"
+                    : "New article"}
+            </b>
           </div>
         </header>
         <div className="scroll">
           {onSeedRoute ? (
             <SeedIntake />
+          ) : onMetricsRoute ? (
+            <MetricsView />
           ) : articleId ? (
             <Workspace articleId={articleId} onBack={handleBack} />
           ) : (

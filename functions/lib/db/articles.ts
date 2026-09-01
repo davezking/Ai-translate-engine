@@ -126,6 +126,33 @@ export async function setCorrectionStatus(
     .run();
 }
 
+export interface FinalizedArticleFixRow {
+  id: string;
+  fix_count: number | null;
+  correction_status: string | null;
+  updated_at: number;
+}
+
+/**
+ * Finalized articles with their fix_count, ordered by finalize time, for the
+ * fixes-per-article trend view (Requirement 13). Ordered by updated_at: once
+ * an article is 'final' nothing touches it again (review edits and QA both
+ * refuse on a finalized article), except the finalize-compare's own
+ * recordCompareResult/setCorrectionStatus calls that immediately follow
+ * finalizeArticle in the same request — so updated_at still lands at
+ * finalize time, not later. Cheap: one indexed-order SELECT, no aggregation.
+ */
+export async function listFinalizedArticleFixCounts(
+  d1: D1Database,
+): Promise<FinalizedArticleFixRow[]> {
+  const { results } = await d1
+    .prepare(
+      "SELECT id, fix_count, correction_status, updated_at FROM articles WHERE status = 'final' ORDER BY updated_at ASC",
+    )
+    .all<FinalizedArticleFixRow>();
+  return results;
+}
+
 /**
  * Seed intake (POST /api/seed): inserts an already-finalized article in one
  * shot from an (English, AI-translation, human-final) triple, tagged
