@@ -342,6 +342,16 @@ export default function MetricsView() {
                                       </span>
                                     )}
                                     <span>{c.changeSummary}</span>
+                                    {c.fixCategories.length > 0 && (
+                                      <ul className="fix-breakdown">
+                                        {c.fixCategories.map((f, i) => (
+                                          <li key={i}>
+                                            <span className="pill pill-warn">{f.category}</span>{" "}
+                                            <span>{f.detail}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    )}
                                   </div>
                                 ))}
                               </div>

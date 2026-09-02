@@ -10,11 +10,17 @@ const input = {
   humanFinalAmharic: "ሚኒስትሩ ፖሊሲውን ይፋ አደረጉ።",
 };
 
+const fixes = [
+  { category: "wording", detail: "Replaced literal verb with idiomatic one" },
+  { category: "grammar-suffix", detail: "Fixed subject agreement suffix" },
+];
+
 function reply(over: Record<string, unknown> = {}): string {
   return JSON.stringify({
     changeSummary: "Reviewer replaced the literal verb with the idiomatic one.",
     fixCount: 2,
     topicTag: "verb-choice",
+    fixes,
     ...over,
   });
 }
@@ -26,7 +32,36 @@ describe("compareTranslations", () => {
       changeSummary: "Reviewer replaced the literal verb with the idiomatic one.",
       fixCount: 2,
       topicTag: "verb-choice",
+      fixes,
     });
+  });
+
+  it("keeps a well-formed per-fix category and drops an unrecognised one to 'other'", async () => {
+    stubGemini([
+      reply({
+        fixes: [
+          { category: "punctuation", detail: "Added missing question mark" },
+          { category: "not-a-real-category", detail: "Something else" },
+        ],
+      }),
+    ]);
+    await expect(compareTranslations(testEnv(), input)).resolves.toMatchObject({
+      fixes: [
+        { category: "punctuation", detail: "Added missing question mark" },
+        { category: "other", detail: "Something else" },
+      ],
+    });
+  });
+
+  it("drops a malformed fixes field to an empty array rather than throwing", async () => {
+    stubGemini([reply({ fixes: "not-an-array" })]);
+    await expect(compareTranslations(testEnv(), input)).resolves.toMatchObject({ fixes: [] });
+
+    stubGemini([reply({ fixes: undefined })]);
+    await expect(compareTranslations(testEnv(), input)).resolves.toMatchObject({ fixes: [] });
+
+    stubGemini([reply({ fixes: [{ category: "wording" }, { detail: "" }, "oops"] })]);
+    await expect(compareTranslations(testEnv(), input)).resolves.toMatchObject({ fixes: [] });
   });
 
   it("asks Gemini for deterministic JSON", async () => {

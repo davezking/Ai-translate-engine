@@ -252,10 +252,18 @@ export function getFixMetrics(): Promise<FixMetricsDTO> {
   return fetch("/api/metrics/fixes").then((res) => asJson(res));
 }
 
+export type FixCategory = "punctuation" | "grammar-suffix" | "wording" | "tone" | "clause" | "other";
+
+export interface FixDetailDTO {
+  category: FixCategory;
+  detail: string;
+}
+
 export interface CorrectionDTO {
   id: string;
   changeSummary: string;
   topicTag: string | null;
+  fixCategories: FixDetailDTO[];
   createdAt: number;
 }
 

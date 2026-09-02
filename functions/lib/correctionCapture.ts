@@ -39,6 +39,7 @@ export async function runCompareAndCapture(
       articleId,
       changeSummary: result.changeSummary,
       topicTag: result.topicTag,
+      fixes: result.fixes,
     });
     await setCorrectionStatus(d1, articleId, "captured", Date.now());
     return { status: "captured", fixCount: result.fixCount, ...captured };

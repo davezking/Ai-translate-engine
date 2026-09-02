@@ -16,6 +16,7 @@ const input = {
   articleId: "art-1",
   changeSummary: "Reviewer replaced the literal verb with the idiomatic one.",
   topicTag: "verb-choice",
+  fixes: [],
 };
 
 describe("captureCorrection", () => {
@@ -47,6 +48,21 @@ describe("captureCorrection", () => {
     const vec = fakeVectorize();
     await captureCorrection(testEnv({ DB: db.d1, VECTORIZE: vec }), { ...input, topicTag: null });
     expect(vec.upserted[0].metadata).toEqual({ article_id: "art-1" });
+  });
+
+  it("stores the per-fix category breakdown as JSON, or null when there is none", async () => {
+    const vec = fakeVectorize();
+    const withFixes = {
+      ...input,
+      fixes: [{ category: "grammar-suffix" as const, detail: "Fixed subject agreement suffix" }],
+    };
+    await captureCorrection(testEnv({ DB: db.d1, VECTORIZE: vec }), withFixes);
+    const [row] = await listCorrections(db.d1);
+    expect(JSON.parse(row.fix_categories as string)).toEqual(withFixes.fixes);
+
+    await captureCorrection(testEnv({ DB: db.d1, VECTORIZE: fakeVectorize() }), input);
+    const rows = await listCorrections(db.d1);
+    expect(rows.find((r) => r.id !== row.id)?.fix_categories).toBeNull();
   });
 
   it("persists nothing at all when the embedding fails", async () => {

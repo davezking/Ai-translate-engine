@@ -349,6 +349,8 @@ kbd {
 .table tbody tr:hover { background: var(--surface-2); }
 .table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .detail-cell { cursor: default; background: var(--surface-2); font-size: 13px; line-height: 1.5; }
+.fix-breakdown { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.fix-breakdown li { display: flex; align-items: baseline; gap: 6px; }
 .t-title { font-weight: 540; letter-spacing: -.008em; }
 .t-meta { font-size: 11.5px; color: var(--text-mute); margin-top: 2px; }
 

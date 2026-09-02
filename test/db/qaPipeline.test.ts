@@ -134,6 +134,7 @@ describe("runQaPipeline", () => {
       articleId: "art-1",
       changeSummary: "Prefer the idiomatic verb.",
       topicTag: "verb-choice",
+      fixCategories: null,
       vectorId: "v1",
       now: 1_000,
     });
