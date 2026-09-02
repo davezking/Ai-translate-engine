@@ -21,7 +21,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // Lists only env key NAMES (never values) actually visible to this
     // Function at request time, to compare against the dashboard's claim.
     return Response.json(
-      { error: "Password login is not configured", debugEnvKeys: Object.keys(context.env).sort() },
+      {
+        error: "Password login is not configured",
+        debugEnvKeys: Object.keys(context.env).sort(),
+        debugSessionSecretLength: (context.env.SESSION_SECRET ?? "").length,
+      },
       { status: 501 },
     );
   }
