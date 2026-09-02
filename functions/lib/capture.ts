@@ -2,11 +2,14 @@ import type { Env } from "./env";
 import { vectorize, db } from "./env";
 import { embedText } from "./embeddings";
 import { insertCorrection } from "./db/corrections";
+import type { FixDetail } from "./compare";
 
 export interface CaptureInput {
   articleId: string;
   changeSummary: string;
   topicTag: string | null;
+  /** Per-fix category breakdown from compare; [] if the model omitted it. */
+  fixes: FixDetail[];
 }
 
 export interface CaptureResult {
@@ -50,6 +53,7 @@ export async function captureCorrection(env: Env, input: CaptureInput): Promise<
       articleId: input.articleId,
       changeSummary: input.changeSummary,
       topicTag: input.topicTag,
+      fixCategories: input.fixes.length > 0 ? JSON.stringify(input.fixes) : null,
       vectorId,
       now,
     });

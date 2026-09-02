@@ -64,6 +64,8 @@ export interface CorrectionRow {
   article_id: string;
   change_summary: string;
   topic_tag: string | null;
+  /** JSON-encoded FixDetail[] (see lib/compare.ts), or null (migration 0008). */
+  fix_categories: string | null;
   vector_id: string;
   created_at: number;
 }

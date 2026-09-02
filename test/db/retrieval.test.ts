@@ -23,6 +23,7 @@ async function correction(
     articleId: "art-1",
     changeSummary: summary,
     topicTag: tag,
+    fixCategories: null,
     vectorId,
     now: 1_000,
   });

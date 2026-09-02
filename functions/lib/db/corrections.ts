@@ -7,15 +7,24 @@ export async function insertCorrection(
     articleId: string;
     changeSummary: string;
     topicTag: string | null;
+    fixCategories: string | null;
     vectorId: string;
     now: number;
   },
 ): Promise<void> {
   await d1
     .prepare(
-      "INSERT INTO corrections (id, article_id, change_summary, topic_tag, vector_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO corrections (id, article_id, change_summary, topic_tag, fix_categories, vector_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
-    .bind(input.id, input.articleId, input.changeSummary, input.topicTag, input.vectorId, input.now)
+    .bind(
+      input.id,
+      input.articleId,
+      input.changeSummary,
+      input.topicTag,
+      input.fixCategories,
+      input.vectorId,
+      input.now,
+    )
     .run();
 }
 

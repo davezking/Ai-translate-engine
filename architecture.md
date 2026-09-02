@@ -102,6 +102,7 @@ erDiagram
       text article_id FK
       text change_summary
       text topic_tag
+      text fix_categories
       text vector_id
       int  created_at
     }
@@ -135,6 +136,7 @@ erDiagram
 Notes:
 - `chunks.status` and `chunks.amharic_text` let a single chunk fail/retry without touching the rest of the article (PRD error-handling requirement).
 - `corrections.vector_id` is the handle into Vectorize; the embedding itself lives in Vectorize, not D1.
+- `corrections.fix_categories` is a JSON array of `{category, detail}` (migration 0008) — one entry per fix counted in that finalize's `fix_count`, tagged with a linguistic category (punctuation, grammar-suffix, wording, tone, clause, other) by the same compare call. Nullable: rows captured before migration 0008 have no breakdown.
 - `styleProfiles.approved` supports the "validate one profile early before it's considered done" requirement.
 - `prompts.current_version_id` pointing at a `promptVersions` row makes rollback a single-field update — no history is destroyed.
 - Array-ish fields (`sample_articles`) are stored as JSON text in SQLite.
