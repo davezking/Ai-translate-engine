@@ -17,7 +17,17 @@ const DUMMY_HASH =
 /** Public (excluded from the /api/* auth middleware): exchanges email+password for a session cookie. */
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   if (!context.env.SESSION_SECRET) {
-    return Response.json({ error: "Password login is not configured" }, { status: 501 });
+    // TEMP DIAGNOSTIC — remove after resolving the missing-secret issue.
+    // Lists only env key NAMES (never values) actually visible to this
+    // Function at request time, to compare against the dashboard's claim.
+    return Response.json(
+      {
+        error: "Password login is not configured",
+        debugEnvKeys: Object.keys(context.env).sort(),
+        debugSessionSecretLength: (context.env.SESSION_SECRET ?? "").length,
+      },
+      { status: 501 },
+    );
   }
 
   let body: LoginBody;
