@@ -44,8 +44,11 @@ export async function generateText(
   });
 
   if (!res.ok) {
-    const errText = await res.text().catch(() => "");
-    throw new Error(`Gemini request failed (${res.status}): ${errText.slice(0, 500)}`);
+    const errText = (await res.text().catch(() => "")).trim();
+    const detail = errText
+      ? errText.slice(0, 500)
+      : `empty body, content-type=${res.headers.get("content-type") ?? "none"}, statusText=${res.statusText || "none"}`;
+    throw new Error(`Gemini request failed (${res.status}): ${detail}`);
   }
 
   const data = (await res.json()) as GeminiResponse;
