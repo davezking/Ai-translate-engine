@@ -8,7 +8,7 @@ pages_build_output_dir = "dist"
 [[d1_databases]]
 binding = "DB"
 database_name = "ai-translate-engine-db"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "0c1ac6e3-0a43-46ce-8dac-5c0e6cccb53e"
 migrations_dir = "migrations"
 
 # --- Vectorize ----------------------------------------------------------
@@ -33,5 +33,9 @@ binding = "AI"
 # ACCESS_TEAM_DOMAIN = "REPLACE_WITH_TEAM.cloudflareaccess.com"
 # ACCESS_AUD = "REPLACE_WITH_ACCESS_APPLICATION_AUD_TAG"
 
-# --- Secrets (set via `wrangler secret put`, never committed) -------------
+# --- Secrets (set via `wrangler pages secret put`, never committed) -------
 # GEMINI_API_KEY
+# SESSION_SECRET   -- only needed if using password login instead of Access
+#                     (functions/lib/session.ts); a long random string.
+#                     Rotating it logs everyone out. Generate with e.g.:
+#                     openssl rand -base64 32

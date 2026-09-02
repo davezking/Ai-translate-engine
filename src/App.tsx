@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Icon from "./Icon";
+import Login from "./Login";
 import MetricsView from "./MetricsView";
 import PasteForm from "./PasteForm";
 import PromptsAdmin from "./PromptsAdmin";
@@ -7,7 +8,7 @@ import SeedIntake from "./SeedIntake";
 import StylesAdmin from "./StylesAdmin";
 import { Toasts } from "./toast";
 import Workspace from "./Workspace";
-import { whoami } from "./api";
+import { checkAuth, logout } from "./api";
 
 function getArticleIdFromHash(): string | null {
   const match = window.location.hash.match(/^#\/articles\/([^/]+)/);
@@ -37,6 +38,7 @@ export default function App() {
   const [onStylesRoute, setOnStylesRoute] = useState(() => isStylesRoute());
   const [onPromptsRoute, setOnPromptsRoute] = useState(() => isPromptsRoute());
   const [isAdmin, setIsAdmin] = useState(false);
+  const [authState, setAuthState] = useState<"checking" | "in" | "out">("checking");
 
   useEffect(() => {
     const onHashChange = () => {
@@ -50,11 +52,22 @@ export default function App() {
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
-  useEffect(() => {
-    whoami()
-      .then((r) => setIsAdmin(r.user.role === "admin"))
-      .catch(() => setIsAdmin(false));
-  }, []);
+  function refreshAuth() {
+    checkAuth()
+      .then((status) => {
+        setIsAdmin(status.isAdmin);
+        setAuthState(status.authenticated ? "in" : "out");
+      })
+      .catch(() => setAuthState("out"));
+  }
+
+  useEffect(refreshAuth, []);
+
+  async function handleLogout() {
+    await logout();
+    setIsAdmin(false);
+    setAuthState("out");
+  }
 
   function handleCreated(id: string) {
     window.location.hash = `#/articles/${id}`;
@@ -88,6 +101,14 @@ export default function App() {
   function handlePromptsNav() {
     window.location.hash = "#/prompts";
     setOnPromptsRoute(true);
+  }
+
+  if (authState === "checking") {
+    return <div className="app" />;
+  }
+
+  if (authState === "out") {
+    return <Login onLoggedIn={refreshAuth} />;
   }
 
   return (
@@ -135,6 +156,14 @@ export default function App() {
             Seed intake
           </button>
         )}
+
+        <button
+          className="btn"
+          style={{ width: "100%", marginTop: 8 }}
+          onClick={() => void handleLogout()}
+        >
+          Sign out
+        </button>
       </aside>
 
       <div className="main">

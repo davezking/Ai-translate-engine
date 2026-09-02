@@ -10,6 +10,12 @@ export interface Env {
   /** Local-dev-only bypass: an email treated as authenticated when Access isn't configured. Never set outside .dev.vars. */
   DEV_BYPASS_EMAIL?: string;
   /**
+   * Signing secret for password-login session cookies (functions/lib/session.ts) —
+   * an interim identity source used only when ACCESS_TEAM_DOMAIN/ACCESS_AUD are
+   * unset. Unset = password login is disabled. Rotating it logs everyone out.
+   */
+  SESSION_SECRET?: string;
+  /**
    * How many past correction lessons the QA pass retrieves (top-N). Tunable
    * without a redeploy via the Pages env var; parsed by qaRetrievalTopN().
    */

@@ -149,6 +149,42 @@ export function whoami(): Promise<WhoAmIDTO> {
   return fetch("/api/admin/whoami").then((res) => asJson(res));
 }
 
+export interface AuthStatus {
+  authenticated: boolean;
+  isAdmin: boolean;
+}
+
+/**
+ * Distinguishes "not logged in" (401, from the /api/* middleware) from
+ * "logged in but not admin" (403, from requireAdmin) — whoami() alone
+ * collapses both into a thrown Error, which App needs to tell apart to
+ * decide whether to show the login screen at all.
+ */
+export async function checkAuth(): Promise<AuthStatus> {
+  const res = await fetch("/api/admin/whoami");
+  if (res.status === 401) return { authenticated: false, isAdmin: false };
+  if (!res.ok) return { authenticated: true, isAdmin: false };
+  return { authenticated: true, isAdmin: true };
+}
+
+export interface LoginResultDTO {
+  email: string;
+  role: "admin" | "reviewer";
+}
+
+/** Password login (interim alternative to Cloudflare Access) — sets the session cookie on success. */
+export function login(email: string, password: string): Promise<LoginResultDTO> {
+  return fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  }).then((res) => asJson(res));
+}
+
+export function logout(): Promise<void> {
+  return fetch("/api/auth/logout", { method: "POST" }).then(() => undefined);
+}
+
 export interface SeedTriple {
   englishSource: string;
   aiTranslation: string;
