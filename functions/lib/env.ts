@@ -47,8 +47,9 @@ export function ai(env: Env): Ai {
 }
 
 export function geminiKey(env: Env): string {
-  if (!env.GEMINI_API_KEY) throw new Error('"GEMINI_API_KEY" secret is not configured');
-  return env.GEMINI_API_KEY;
+  const key = env.GEMINI_API_KEY?.trim();
+  if (!key) throw new Error('"GEMINI_API_KEY" secret is not configured');
+  return key;
 }
 
 /** Default number of correction lessons retrieved into the QA prompt. */
