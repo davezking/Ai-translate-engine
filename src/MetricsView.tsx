@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import Icon from "./Icon";
-import { getFixMetrics, type FixMetricPoint } from "./api";
+import { getArticleCorrections, getFixMetrics, type CorrectionDTO, type FixMetricPoint } from "./api";
 
 const CHART_W = 720;
 const CHART_H = 240;
@@ -34,6 +34,10 @@ export default function MetricsView() {
   const [points, setPoints] = useState<FixMetricPoint[] | null>(null);
   const [baselineEndsAt, setBaselineEndsAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [correctionsByArticle, setCorrectionsByArticle] = useState<
+    Record<string, CorrectionDTO[] | "loading" | "error">
+  >({});
 
   useEffect(() => {
     let cancelled = false;
@@ -62,6 +66,21 @@ export default function MetricsView() {
   );
   const baselineAvg = average(baselinePoints.map((p) => p.fixCount as number));
   const recentAvg = average(recentPoints.map((p) => p.fixCount as number));
+
+  function toggleRow(articleId: string) {
+    if (expandedId === articleId) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(articleId);
+    if (correctionsByArticle[articleId] !== undefined) return;
+    setCorrectionsByArticle((prev) => ({ ...prev, [articleId]: "loading" }));
+    getArticleCorrections(articleId)
+      .then((r) =>
+        setCorrectionsByArticle((prev) => ({ ...prev, [articleId]: r.corrections })),
+      )
+      .catch(() => setCorrectionsByArticle((prev) => ({ ...prev, [articleId]: "error" })));
+  }
 
   const chart = useMemo(() => {
     if (scored.length === 0) return null;
@@ -270,28 +289,69 @@ export default function MetricsView() {
                 </tr>
               </thead>
               <tbody>
-                {points.map((p) => (
-                  <tr key={p.articleId}>
-                    <td className="mono">{p.articleId.slice(0, 8)}</td>
-                    <td>{formatDate(p.finalizedAt)}</td>
-                    <td className="num">{p.fixCount ?? "—"}</td>
-                    <td>
-                      <span
-                        className={`pill ${
-                          p.correctionStatus === "captured"
-                            ? "pill-ok"
-                            : p.correctionStatus === "skipped"
-                              ? "pill-info"
-                              : p.correctionStatus === "pending"
-                                ? "pill-warn"
-                                : ""
-                        }`}
+                {points.map((p) => {
+                  const expanded = expandedId === p.articleId;
+                  const canExpand = p.correctionStatus === "captured";
+                  const entry = correctionsByArticle[p.articleId];
+                  return (
+                    <Fragment key={p.articleId}>
+                      <tr
+                        onClick={canExpand ? () => toggleRow(p.articleId) : undefined}
+                        style={canExpand ? undefined : { cursor: "default" }}
                       >
-                        {p.correctionStatus ?? "unknown"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                        <td className="mono">
+                          {canExpand && <span className="dim">{expanded ? "▾" : "▸"} </span>}
+                          {p.articleId.slice(0, 8)}
+                        </td>
+                        <td>{formatDate(p.finalizedAt)}</td>
+                        <td className="num">{p.fixCount ?? "—"}</td>
+                        <td>
+                          <span
+                            className={`pill ${
+                              p.correctionStatus === "captured"
+                                ? "pill-ok"
+                                : p.correctionStatus === "skipped"
+                                  ? "pill-info"
+                                  : p.correctionStatus === "pending"
+                                    ? "pill-warn"
+                                    : ""
+                            }`}
+                          >
+                            {p.correctionStatus ?? "unknown"}
+                          </span>
+                        </td>
+                      </tr>
+                      {expanded && (
+                        <tr key={`${p.articleId}-detail`}>
+                          <td colSpan={4} className="detail-cell">
+                            {entry === undefined || entry === "loading" ? (
+                              <span className="hint">Loading what was learned…</span>
+                            ) : entry === "error" ? (
+                              <span className="hint">Failed to load corrections.</span>
+                            ) : entry.length === 0 ? (
+                              <span className="hint">
+                                No correction stored for this article.
+                              </span>
+                            ) : (
+                              <div className="stack-sm">
+                                {entry.map((c) => (
+                                  <div key={c.id}>
+                                    {c.topicTag && (
+                                      <span className="pill pill-info" style={{ marginRight: 8 }}>
+                                        {c.topicTag}
+                                      </span>
+                                    )}
+                                    <span>{c.changeSummary}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

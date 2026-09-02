@@ -252,6 +252,17 @@ export function getFixMetrics(): Promise<FixMetricsDTO> {
   return fetch("/api/metrics/fixes").then((res) => asJson(res));
 }
 
+export interface CorrectionDTO {
+  id: string;
+  changeSummary: string;
+  topicTag: string | null;
+  createdAt: number;
+}
+
+export function getArticleCorrections(articleId: string): Promise<{ corrections: CorrectionDTO[] }> {
+  return fetch(`/api/articles/${articleId}/corrections`).then((res) => asJson(res));
+}
+
 export interface StyleProfileDTO {
   id: string;
   writerName: string;

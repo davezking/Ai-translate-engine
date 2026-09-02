@@ -40,6 +40,18 @@ export async function getCorrectionsByVectorIds(
   return vectorIds.map((id) => byVectorId.get(id)).filter((r): r is CorrectionRow => Boolean(r));
 }
 
+/** Corrections captured for one article — the "what was learned" view (newest first). */
+export async function getCorrectionsByArticleId(
+  d1: D1Database,
+  articleId: string,
+): Promise<CorrectionRow[]> {
+  const { results } = await d1
+    .prepare("SELECT * FROM corrections WHERE article_id = ? ORDER BY created_at DESC")
+    .bind(articleId)
+    .all<CorrectionRow>();
+  return results;
+}
+
 export async function listCorrections(d1: D1Database): Promise<CorrectionRow[]> {
   const { results } = await d1
     .prepare("SELECT * FROM corrections ORDER BY created_at DESC")
