@@ -27,6 +27,12 @@ describe("binding accessors", () => {
     expect(() => ai(testEnv({ AI: undefined }))).toThrow(/"AI"/);
     expect(() => geminiKey(testEnv({ GEMINI_API_KEY: "" }))).toThrow(/GEMINI_API_KEY/);
   });
+
+  it("trims stray whitespace from the Gemini key so a pasted-in newline can't malform the request header", () => {
+    expect(geminiKey(testEnv({ GEMINI_API_KEY: "test-key\n" }))).toBe("test-key");
+    expect(geminiKey(testEnv({ GEMINI_API_KEY: "  test-key  " }))).toBe("test-key");
+    expect(() => geminiKey(testEnv({ GEMINI_API_KEY: "   " }))).toThrow(/GEMINI_API_KEY/);
+  });
 });
 
 describe("qaRetrievalTopN", () => {
