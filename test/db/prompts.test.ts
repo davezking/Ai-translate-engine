@@ -136,7 +136,7 @@ describe("listPromptVersions", () => {
 
     const versions = await listPromptVersions(db.d1, "qa");
     expect(versions.map((v) => v.version)).toEqual([2, 1]);
-    expect(versions[0].author_email).toBe("REPLACE_WITH_SECOND_USER_EMAIL");
+    expect(versions[0].author_email).toBe("itzone04@gmail.com");
     expect(versions[1].author_email).toBe("yegnatop10@gmail.com");
   });
 

@@ -33,5 +33,9 @@ binding = "AI"
 # ACCESS_TEAM_DOMAIN = "REPLACE_WITH_TEAM.cloudflareaccess.com"
 # ACCESS_AUD = "REPLACE_WITH_ACCESS_APPLICATION_AUD_TAG"
 
-# --- Secrets (set via `wrangler secret put`, never committed) -------------
+# --- Secrets (set via `wrangler pages secret put`, never committed) -------
 # GEMINI_API_KEY
+# SESSION_SECRET   -- only needed if using password login instead of Access
+#                     (functions/lib/session.ts); a long random string.
+#                     Rotating it logs everyone out. Generate with e.g.:
+#                     openssl rand -base64 32
