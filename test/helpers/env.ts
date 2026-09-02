@@ -90,13 +90,13 @@ export function stubGemini(replies: string[]): GeminiStub {
 
   vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
     const body = JSON.parse(String(init.body)) as {
-      system_instruction: { parts: { text: string }[] };
+      systemInstruction: { parts: { text: string }[] };
       contents: { parts: { text: string }[] }[];
       generationConfig?: { temperature?: number; responseMimeType?: string };
     };
     const headers = init.headers as Record<string, string>;
     calls.push({
-      systemInstruction: body.system_instruction.parts[0].text,
+      systemInstruction: body.systemInstruction.parts[0].text,
       userContent: body.contents[0].parts[0].text,
       temperature: body.generationConfig?.temperature,
       responseMimeType: body.generationConfig?.responseMimeType,

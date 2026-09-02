@@ -26,7 +26,7 @@ export async function generateText(
 ): Promise<string> {
   const url = `${API_BASE}/models/${GEMINI_MODEL}:generateContent`;
   const body = {
-    system_instruction: { parts: [{ text: systemInstruction }] },
+    systemInstruction: { parts: [{ text: systemInstruction }] },
     contents: [{ role: "user", parts: [{ text: userContent }] }],
     generationConfig: {
       temperature: options.temperature ?? 0.2,
