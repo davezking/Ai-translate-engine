@@ -61,15 +61,14 @@ describe("users", () => {
     ]);
   });
 
-  it("still carries the placeholder reviewer email", async () => {
-    // Guards the deploy footgun: migration 0002 must have a real second email
-    // filled in before it is applied anywhere real, and it cannot be edited
-    // afterwards. If this test ever fails, the placeholder was replaced —
-    // update it here too.
+  it("seeds the real reviewer email, not the placeholder", async () => {
+    // migration 0002's placeholder was filled in with the real second email
+    // before being applied anywhere real, per its own instructions, and
+    // migrations are never edited afterwards — this pins that value.
     const row = await db.d1
       .prepare("SELECT email FROM users WHERE id = 'usr_reviewer'")
       .first<{ email: string }>();
-    expect(row?.email).toBe("REPLACE_WITH_SECOND_USER_EMAIL");
+    expect(row?.email).toBe("itzone04@gmail.com");
   });
 
   it("rejects a role outside admin/reviewer", async () => {
