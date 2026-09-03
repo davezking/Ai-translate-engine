@@ -175,7 +175,15 @@ describe("runQaPipeline", () => {
     await setArticleDraft(db.d1, "art-1", "pre-QA draft", 2_000);
     stubGeminiError(503, "upstream unavailable");
 
-    const outcome = await runQaPipeline(env(), "art-1");
+    vi.useFakeTimers();
+    let outcome: Awaited<ReturnType<typeof runQaPipeline>>;
+    try {
+      const result = runQaPipeline(env(), "art-1");
+      await vi.runAllTimersAsync();
+      outcome = await result;
+    } finally {
+      vi.useRealTimers();
+    }
 
     expect(outcome.status).toBe("failed");
     expect(await getArticle(db.d1, "art-1")).toMatchObject({

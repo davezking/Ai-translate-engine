@@ -154,8 +154,15 @@ describe("runQaPass", () => {
     await expect(runQaPass(testEnv(), baseInput)).rejects.toThrow(/empty/i);
   });
 
-  it("surfaces a Gemini transport failure", async () => {
+  it("surfaces a Gemini transport failure after exhausting retries", async () => {
     stubGeminiError(503, "upstream unavailable");
-    await expect(runQaPass(testEnv(), baseInput)).rejects.toThrow(/503/);
+    vi.useFakeTimers();
+    try {
+      const result = expect(runQaPass(testEnv(), baseInput)).rejects.toThrow(/503/);
+      await vi.runAllTimersAsync();
+      await result;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
