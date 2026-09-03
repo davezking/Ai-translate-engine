@@ -26,6 +26,7 @@ If a task seems to need a different service (a second DB, a different vector sto
 6. **Prompt history is immutable.** Publishing a prompt inserts a new `promptVersions` row and repoints `prompts.current_version_id`. Never overwrite or delete a version. Rollback = repoint only.
 7. **Input is pasted plain text only.** No file upload, no `.docx`/`.txt`, no Google Docs API. Don't add upload handling.
 8. **Admin-gated routes stay gated.** Prompt engine and style management require `role = 'admin'` (via `requireAdmin`), on top of Access.
+9. **Gemini calls are resilient by design.** `functions/lib/gemini.ts` retries transient failures with backoff and falls back from `gemini-3.6-flash` to `gemini-3.6-flash-lite` on persistent 429/5xx (including the "high demand" 503). Don't remove this without checking why a call is failing first.
 
 ## Amharic / Ge'ez
 
