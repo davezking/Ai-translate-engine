@@ -8,7 +8,7 @@
     "dev:vite": "vite --port 5173",
     "build": "vite build",
     "preview": "wrangler pages dev dist",
-    "deploy": "npm run build && wrangler pages deploy dist",
+    "deploy": "npm run db:migrate:remote && npm run build && wrangler pages deploy dist",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
