@@ -2,11 +2,10 @@ import type { Env } from "./env";
 import { geminiKey } from "./env";
 
 // Tried in order; each non-final model gets one attempt before moving to the next, and
-// the final model gets the full retry-with-backoff budget. gemini-3.5-flash-lite and
-// gemini-3.1-flash-lite are unverified against a live ListModels call (see the note on
-// generateText below) — if either ID is wrong, ADVANCE_STATUSES below makes that a
-// same-shaped failure as a capacity error, so the chain still falls through instead of
-// breaking resilience the way the removed gemini-3.6-flash-lite fallback once did.
+// the final model gets the full retry-with-backoff budget. All three IDs are confirmed
+// against a live ListModels call for this project's key/API version (2026-09-04) — see
+// the note on generateText below for the one that wasn't (gemini-3.6-flash-lite) and why
+// ADVANCE_STATUSES still guards against a bad ID here in the future.
 const MODEL_CHAIN = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -116,11 +115,12 @@ async function callModel(
  * before giving up for real. A non-retryable, non-404 error (bad request, empty output) is
  * not worth trying on a different model and throws immediately.
  *
- * gemini-3.5-flash-lite and gemini-3.1-flash-lite are unverified against a live ListModels
- * call for this project's key/API version — gemini-3.6-flash-lite, an earlier guess, turned
- * out not to exist (confirmed via a live 404) and was removed. If either current fallback ID
- * is also wrong, the 404-advances-the-chain behavior above means it degrades to "skip that
- * tier" rather than repeating that outage.
+ * gemini-3.5-flash-lite and gemini-3.1-flash-lite were confirmed against a live ListModels
+ * call for this project's key/API version on 2026-09-04. An earlier guess, gemini-3.6-flash-
+ * lite, was not checked first and turned out not to exist (confirmed via a live 404) — the
+ * 404-advances-the-chain behavior above is what would have made that mistake degrade to
+ * "skip that tier" instead of an outage, and stays in place as a guard against the next model
+ * rename or deprecation, not because these two IDs are currently in doubt.
  */
 export async function generateText(
   env: Env,
