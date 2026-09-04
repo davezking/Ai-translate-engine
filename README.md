@@ -67,12 +67,12 @@ declared in `wrangler.toml` and resolves at runtime.
 
 On the Pages project, under **Settings → Variables and Secrets**:
 
-| Name                 | Kind                | Value                               |
-| -------------------- | ------------------- | ----------------------------------- |
-| `GEMINI_API_KEY`     | Secret (encrypted)  | Your Gemini API key                 |
-| `ACCESS_TEAM_DOMAIN` | Variable            | e.g. `my-team.cloudflareaccess.com` |
-| `ACCESS_AUD`         | Variable            | The Access application's AUD tag    |
-| `QA_RETRIEVAL_TOP_N` | Variable (optional) | Defaults to 4; clamped to 1–20      |
+| Name                     | Kind                | Value                                                                                                                       |
+| ------------------------ | ------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `GEMINI_API_KEY`         | Secret (encrypted)  | Your Gemini API key                                                                                                         |
+| `ACCESS_TEAM_DOMAIN`     | Variable            | e.g. `my-team.cloudflareaccess.com`                                                                                         |
+| `ACCESS_AUD`             | Variable            | The Access application's AUD tag                                                                                            |
+| `QA_RETRIEVAL_TOP_N`     | Variable (optional) | Defaults to 4; clamped to 1–20                                                                                              |
 | `QA_RETRIEVAL_MIN_SCORE` | Variable (optional) | Defaults to 0 (permissive); clamped to [-1, 1]. Tune up once seed data shows real match scores — see `functions/lib/env.ts` |
 
 The secret can also be set with `npx wrangler pages secret put GEMINI_API_KEY`.
@@ -94,8 +94,13 @@ is tolerated; an otherwise different value rejects every token.
 npm run db:migrate:remote
 ```
 
-Applies `migrations/0001` through `0006`. This is the irreversible step — see
-**One-way doors** above. Confirm the reviewer email is real before running it.
+Applies every migration in `migrations/` that the remote D1 hasn't seen yet
+(wrangler tracks which are already applied, so re-running is a no-op). This is
+the irreversible step — see **One-way doors** above. Confirm the reviewer email
+is real before running it.
+
+You can run this by hand, but you don't have to: `npm run deploy` runs it for
+you (next step).
 
 ### 4. Deploy
 
@@ -103,7 +108,17 @@ Applies `migrations/0001` through `0006`. This is the irreversible step — see
 npm run deploy
 ```
 
-Builds the SPA and deploys it with the Pages Functions in `functions/`.
+Applies any pending remote migrations, then builds the SPA and deploys it with
+the Pages Functions in `functions/`. Migrations run **before** the code ships,
+so the schema is never left lagging behind code that expects it — the failure
+mode that produces `D1_ERROR: no such column: …` at runtime when a new
+column-referencing route goes live against a DB that never got the migration.
+All migrations here are additive, nullable `ADD COLUMN`s, so applying them ahead
+of the deploy is safe: the currently-live code simply ignores the new column.
+
+If a deploy has already shipped code that references a column the remote DB is
+missing, run `npm run db:migrate:remote` on its own to reconcile immediately —
+no rebuild needed.
 
 ### 5. Verify
 
