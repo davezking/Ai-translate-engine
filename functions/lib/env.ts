@@ -20,6 +20,12 @@ export interface Env {
    * without a redeploy via the Pages env var; parsed by qaRetrievalTopN().
    */
   QA_RETRIEVAL_TOP_N?: string;
+  /**
+   * Minimum Vectorize similarity score a retrieved lesson must meet to be used
+   * (the "relevance floor" — architecture.md §10). Tunable without a redeploy
+   * via the Pages env var; parsed by qaRetrievalMinScore().
+   */
+  QA_RETRIEVAL_MIN_SCORE?: string;
 }
 
 /**
@@ -66,6 +72,32 @@ export function qaRetrievalTopN(env: Env): number {
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 1) return QA_RETRIEVAL_TOP_N_DEFAULT;
   return Math.min(20, Math.round(n));
+}
+
+/**
+ * Default minimum Vectorize similarity score ("cosine", per wrangler.toml) a
+ * retrieved lesson must meet to be used. Deliberately permissive (near the
+ * bottom of the metric's [-1, 1] range) rather than a guessed "reasonable"
+ * cutoff: sentence-embedding cosine scores between genuinely unrelated text
+ * are known to skew positive rather than cluster near 0, so a confident-
+ * looking default risks silently dropping relevant lessons before anyone has
+ * seen this corpus's real score distribution. Tune this up (via the
+ * QA_RETRIEVAL_MIN_SCORE env var) once the seed library is loaded and the
+ * per-chunk retrieval log (qaPipeline.ts) shows what real matches score.
+ */
+export const QA_RETRIEVAL_MIN_SCORE_DEFAULT = 0;
+
+/**
+ * Resolves the QA retrieval relevance floor from env, defaulting to
+ * QA_RETRIEVAL_MIN_SCORE_DEFAULT and clamping to the metric's [-1, 1] range
+ * so a bad env value can't be misread as an impossible cutoff.
+ */
+export function qaRetrievalMinScore(env: Env): number {
+  const raw = env.QA_RETRIEVAL_MIN_SCORE;
+  if (raw === undefined || raw.trim() === "") return QA_RETRIEVAL_MIN_SCORE_DEFAULT;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return QA_RETRIEVAL_MIN_SCORE_DEFAULT;
+  return Math.max(-1, Math.min(1, n));
 }
 
 /** Presence check only — never triggers a paid call. */
