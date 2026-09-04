@@ -37,7 +37,13 @@ export const onRequestPost: PagesFunction<Env, string, AuthedData> = async (cont
 
   const qaOutcome = await runQaPipeline(context.env, articleId);
   if (qaOutcome.status === "qad") {
-    return Response.json({ amharicDraft: qaOutcome.amharicDraft, qa: true });
+    return Response.json({
+      amharicDraft: qaOutcome.amharicDraft,
+      qa: true,
+      // Chunks whose own QA pass failed and fell back to their plain
+      // translation (pipeline order: one chunk failing never fails the pass).
+      failedOrds: qaOutcome.failedOrds,
+    });
   }
 
   return Response.json({

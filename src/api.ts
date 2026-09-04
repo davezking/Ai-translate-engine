@@ -40,6 +40,8 @@ export interface ChunkDTO {
   amharic_text: string | null;
   status: string;
   english_hash: string | null;
+  /** This chunk's own QA'd Amharic, or null if not yet QA'd / its QA pass fell back to amharic_text. */
+  amharic_qa: string | null;
   wordCount: number;
 }
 
@@ -96,6 +98,8 @@ export interface ReassembleResultDTO {
   /** true if the QA pass ran and amharicDraft is its output; false if QA failed and this is the raw reassembled draft. */
   qa: boolean;
   qaError?: string;
+  /** Chunk ords whose own QA pass failed and fell back to their plain translation; present only when qa is true. */
+  failedOrds?: number[];
 }
 
 export function reassemble(articleId: string): Promise<ReassembleResultDTO> {
@@ -110,6 +114,8 @@ export interface QaResultDTO {
   retrievedCorrectionIds: string[];
   lessons: { correctionId: string; topicTag: string | null; score: number }[];
   styleApplied: string | null;
+  /** Chunk ords whose own QA pass failed and fell back to their plain translation. */
+  failedOrds: number[];
   retrievalError?: string;
 }
 
@@ -252,7 +258,8 @@ export function getFixMetrics(): Promise<FixMetricsDTO> {
   return fetch("/api/metrics/fixes").then((res) => asJson(res));
 }
 
-export type FixCategory = "punctuation" | "grammar-suffix" | "wording" | "tone" | "clause" | "other";
+export type FixCategory =
+  "punctuation" | "grammar-suffix" | "wording" | "tone" | "clause" | "other";
 
 export interface FixDetailDTO {
   category: FixCategory;
@@ -267,7 +274,9 @@ export interface CorrectionDTO {
   createdAt: number;
 }
 
-export function getArticleCorrections(articleId: string): Promise<{ corrections: CorrectionDTO[] }> {
+export function getArticleCorrections(
+  articleId: string,
+): Promise<{ corrections: CorrectionDTO[] }> {
   return fetch(`/api/articles/${articleId}/corrections`).then((res) => asJson(res));
 }
 

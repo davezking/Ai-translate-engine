@@ -57,6 +57,12 @@ export interface ChunkRow {
   status: string;
   /** Hash of english_text as of the last successful translation; NULL if never translated. */
   english_hash: string | null;
+  /**
+   * Per-chunk QA'd Amharic (migration 0009), independent of sibling chunks.
+   * NULL = not yet QA'd, or this chunk's QA pass failed and it still carries
+   * only its plain translation — never touched by reviewer autosave.
+   */
+  amharic_qa: string | null;
 }
 
 export interface CorrectionRow {

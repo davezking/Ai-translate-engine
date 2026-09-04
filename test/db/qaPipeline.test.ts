@@ -6,7 +6,11 @@ import {
   setArticleDraft,
   setArticleStyle,
 } from "../../functions/lib/db/articles";
-import { replaceChunks, setChunkTranslation } from "../../functions/lib/db/chunks";
+import {
+  listChunksByArticle,
+  replaceChunks,
+  setChunkTranslation,
+} from "../../functions/lib/db/chunks";
 import { insertCorrection } from "../../functions/lib/db/corrections";
 import { approveStyleProfile, createStyleProfile } from "../../functions/lib/db/styleProfiles";
 import { createTestDb, type TestDb } from "../helpers/d1";
@@ -58,19 +62,29 @@ async function approvedStyle(id = "sty-1", guidelines = "Short declarative sente
 }
 
 describe("runQaPipeline", () => {
-  it("QAs the chunk translations and stores the result as the working draft", async () => {
+  it("QAs each chunk independently and joins the results into the working draft", async () => {
     await translatedChunks("ክፍል አንድ።", "ክፍል ሁለት።");
-    const gemini = stubGemini(["QA'd Amharic"]);
+    const gemini = stubGemini(["QA one", "QA two"]);
 
     const outcome = await runQaPipeline(env(), "art-1");
 
-    expect(outcome).toMatchObject({ status: "qad", amharicDraft: "QA'd Amharic" });
-    expect(gemini.calls[0].userContent).toContain("ክፍል አንድ።\n\nክፍል ሁለት።");
+    expect(outcome).toMatchObject({
+      status: "qad",
+      amharicDraft: "QA one\n\nQA two",
+      failedOrds: [],
+    });
+    expect(gemini.calls).toHaveLength(2);
+    expect(gemini.calls[0].userContent).toContain("ክፍል አንድ።");
+    expect(gemini.calls[0].userContent).not.toContain("ክፍል ሁለት።");
+    expect(gemini.calls[1].userContent).toContain("ክፍል ሁለት።");
+    expect(gemini.calls[1].userContent).not.toContain("ክፍል አንድ።");
     expect(await getArticle(db.d1, "art-1")).toMatchObject({
-      amharic_draft: "QA'd Amharic",
-      amharic_qa: "QA'd Amharic",
+      amharic_draft: "QA one\n\nQA two",
+      amharic_qa: "QA one\n\nQA two",
       status: "qad",
     });
+    const chunks = await listChunksByArticle(db.d1, "art-1");
+    expect(chunks.map((c) => c.amharic_qa)).toEqual(["QA one", "QA two"]);
   });
 
   it("QAs the chunk text, not a draft a reviewer may already have edited", async () => {
@@ -84,12 +98,16 @@ describe("runQaPipeline", () => {
     expect(gemini.calls[0].userContent).not.toContain("an edited draft");
   });
 
-  it("uses the current qa prompt version as the system instruction", async () => {
-    await translatedChunks("machine");
-    const gemini = stubGemini(["QA'd"]);
+  it("uses the current qa prompt version as the system instruction for every chunk", async () => {
+    await translatedChunks("machine 0", "machine 1");
+    const gemini = stubGemini(["QA0", "QA1"]);
+
     await runQaPipeline(env(), "art-1");
 
-    expect(gemini.calls[0].systemInstruction).toContain("QA editor for Amharic translations");
+    expect(gemini.calls).toHaveLength(2);
+    for (const call of gemini.calls) {
+      expect(call.systemInstruction).toContain("QA editor for Amharic translations");
+    }
   });
 
   it("picks up a republished qa prompt without any redeploy", async () => {
@@ -106,15 +124,18 @@ describe("runQaPipeline", () => {
     expect(gemini.calls[0].systemInstruction).toBe("A COMPLETELY NEW QA PROMPT");
   });
 
-  it("applies the selected writer style and reports whose it was", async () => {
-    await translatedChunks("machine");
+  it("applies the selected writer style to every chunk", async () => {
+    await translatedChunks("machine 0", "machine 1");
     await approvedStyle();
-    const gemini = stubGemini(["QA'd"]);
+    const gemini = stubGemini(["QA0", "QA1"]);
 
     const outcome = await runQaPipeline(env(), "art-1");
 
     expect(outcome).toMatchObject({ status: "qad", styleApplied: "Almaz T." });
-    expect(gemini.calls[0].userContent).toContain("Short declarative sentences.");
+    expect(gemini.calls).toHaveLength(2);
+    for (const call of gemini.calls) {
+      expect(call.userContent).toContain("Short declarative sentences.");
+    }
   });
 
   it("runs with general judgement when no style is selected", async () => {
@@ -127,7 +148,7 @@ describe("runQaPipeline", () => {
     expect(gemini.calls[0].userContent).not.toContain("TONE/VOICE GUIDELINES");
   });
 
-  it("injects retrieved lessons into the prompt", async () => {
+  it("injects a chunk's own retrieved lessons into that chunk's prompt", async () => {
     await translatedChunks("machine");
     await insertCorrection(db.d1, {
       id: "c1",
@@ -147,6 +168,71 @@ describe("runQaPipeline", () => {
     expect(gemini.calls[0].userContent).toContain("Prefer the idiomatic verb.");
   });
 
+  it("retrieves separately per chunk and combines the results, deduping by correction", async () => {
+    await translatedChunks("machine 0", "machine 1");
+    await insertCorrection(db.d1, {
+      id: "c1",
+      articleId: "art-1",
+      changeSummary: "Lesson for chunk 0.",
+      topicTag: null,
+      fixCategories: null,
+      vectorId: "v1",
+      now: 1_000,
+    });
+    await insertCorrection(db.d1, {
+      id: "c2",
+      articleId: "art-1",
+      changeSummary: "Lesson for chunk 1.",
+      topicTag: null,
+      fixCategories: null,
+      vectorId: "v2",
+      now: 1_000,
+    });
+    const query = vi
+      .spyOn(vec, "query")
+      .mockImplementationOnce(async () => ({ matches: [{ id: "v1", score: 0.9 }] }))
+      .mockImplementationOnce(async () => ({ matches: [{ id: "v2", score: 0.8 }] }));
+    const gemini = stubGemini(["QA0", "QA1"]);
+
+    const outcome = await runQaPipeline(env(), "art-1");
+
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(gemini.calls[0].userContent).toContain("Lesson for chunk 0.");
+    expect(gemini.calls[0].userContent).not.toContain("Lesson for chunk 1.");
+    expect(gemini.calls[1].userContent).toContain("Lesson for chunk 1.");
+    expect(gemini.calls[1].userContent).not.toContain("Lesson for chunk 0.");
+    expect(outcome.status).toBe("qad");
+    if (outcome.status === "qad") {
+      expect(outcome.lessons.map((l) => l.correctionId).sort()).toEqual(["c1", "c2"]);
+    }
+  });
+
+  it("dedupes a lesson retrieved for more than one chunk, keeping its best score", async () => {
+    await translatedChunks("machine 0", "machine 1");
+    await insertCorrection(db.d1, {
+      id: "c1",
+      articleId: "art-1",
+      changeSummary: "Shared lesson.",
+      topicTag: null,
+      fixCategories: null,
+      vectorId: "v1",
+      now: 1_000,
+    });
+    vi.spyOn(vec, "query")
+      .mockImplementationOnce(async () => ({ matches: [{ id: "v1", score: 0.5 }] }))
+      .mockImplementationOnce(async () => ({ matches: [{ id: "v1", score: 0.9 }] }));
+    stubGemini(["QA0", "QA1"]);
+
+    const outcome = await runQaPipeline(env(), "art-1");
+
+    expect(outcome.status).toBe("qad");
+    if (outcome.status === "qad") {
+      expect(outcome.lessons).toEqual([
+        expect.objectContaining({ correctionId: "c1", score: 0.9 }),
+      ]);
+    }
+  });
+
   it("honours a configured retrieval top-N", async () => {
     await translatedChunks("machine");
     const query = vi.spyOn(vec, "query");
@@ -156,21 +242,50 @@ describe("runQaPipeline", () => {
     expect(query).toHaveBeenCalledWith(expect.any(Array), { topK: 9, returnMetadata: false });
   });
 
-  it("still QAs when retrieval fails, and reports the degradation", async () => {
-    await translatedChunks("machine");
+  it("still QAs when retrieval fails for every chunk, and reports the degradation", async () => {
+    await translatedChunks("machine 0", "machine 1");
     vec.query = async () => {
       throw new Error("vectorize down");
     };
-    const gemini = stubGemini(["QA'd"]);
+    const gemini = stubGemini(["QA0", "QA1"]);
 
     const outcome = await runQaPipeline(env(), "art-1");
 
-    expect(outcome).toMatchObject({ status: "qad", retrievalError: "vectorize down" });
-    expect(gemini.calls).toHaveLength(1);
+    expect(outcome).toMatchObject({
+      status: "qad",
+      retrievalError: "vectorize down",
+      failedOrds: [],
+      lessons: [],
+    });
+    expect(gemini.calls).toHaveLength(2);
     expect((await getArticle(db.d1, "art-1"))?.status).toBe("qad");
   });
 
-  it("fails without touching the draft when Gemini fails", async () => {
+  it("a chunk whose QA pass fails keeps its plain translation; the rest still QA", async () => {
+    await translatedChunks("machine 0", "machine 1");
+    let calls = 0;
+    vi.stubGlobal("fetch", async () => {
+      calls++;
+      if (calls === 1) return new Response("bad request", { status: 400 });
+      return new Response(
+        JSON.stringify({ candidates: [{ content: { parts: [{ text: "QA1" }] } }] }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    const outcome = await runQaPipeline(env(), "art-1");
+
+    expect(outcome).toMatchObject({ status: "qad", failedOrds: [0] });
+    if (outcome.status === "qad") {
+      expect(outcome.amharicDraft).toBe("machine 0\n\nQA1");
+    }
+    const chunks = await listChunksByArticle(db.d1, "art-1");
+    expect(chunks[0].amharic_qa).toBeNull();
+    expect(chunks[1].amharic_qa).toBe("QA1");
+    expect((await getArticle(db.d1, "art-1"))?.status).toBe("qad");
+  });
+
+  it("fails without touching the draft when Gemini fails for the only chunk", async () => {
     await translatedChunks("machine");
     await setArticleDraft(db.d1, "art-1", "pre-QA draft", 2_000);
     stubGeminiError(503, "upstream unavailable");
