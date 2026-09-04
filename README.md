@@ -73,6 +73,7 @@ On the Pages project, under **Settings → Variables and Secrets**:
 | `ACCESS_TEAM_DOMAIN` | Variable            | e.g. `my-team.cloudflareaccess.com` |
 | `ACCESS_AUD`         | Variable            | The Access application's AUD tag    |
 | `QA_RETRIEVAL_TOP_N` | Variable (optional) | Defaults to 4; clamped to 1–20      |
+| `QA_RETRIEVAL_MIN_SCORE` | Variable (optional) | Defaults to 0 (permissive); clamped to [-1, 1]. Tune up once seed data shows real match scores — see `functions/lib/env.ts` |
 
 The secret can also be set with `npx wrangler pages secret put GEMINI_API_KEY`.
 It is never committed and is readable only from server routes.

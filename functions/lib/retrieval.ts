@@ -1,5 +1,5 @@
 import type { Env } from "./env";
-import { vectorize, db } from "./env";
+import { vectorize, db, qaRetrievalMinScore } from "./env";
 import { embedText } from "./embeddings";
 import { getCorrectionsByVectorIds } from "./db/corrections";
 
@@ -21,8 +21,15 @@ export interface RetrievedLesson {
  * The English source is what gets embedded because the embedding model is
  * English (bge-base-en) and the stored vectors were built from English change
  * summaries — both live in the same space, so topical similarity lines up.
- * Matches whose D1 row is missing are dropped (see getCorrectionsByVectorIds),
- * so the result is at most `topN` and preserves the similarity ranking.
+ *
+ * Vectorize's topK is a nearest-K search, not a relevance filter — it always
+ * returns up to `topN` matches regardless of how weak the closest ones are.
+ * qaRetrievalMinScore (the "relevance floor") drops matches below a tunable
+ * score before they're even resolved against D1, so a cold or off-topic
+ * library returns fewer (or zero) lessons instead of `topN` mediocre ones.
+ * Matches whose D1 row is missing are also dropped (see
+ * getCorrectionsByVectorIds), so the result is at most `topN` and preserves
+ * the similarity ranking either way.
  */
 export async function retrieveLessons(
   env: Env,
@@ -33,10 +40,13 @@ export async function retrieveLessons(
   if (!trimmed) return [];
 
   const queryVector = await embedText(env, trimmed);
-  const { matches } = await vectorize(env).query(queryVector, {
+  const { matches: allMatches } = await vectorize(env).query(queryVector, {
     topK: topN,
     returnMetadata: false,
   });
+
+  const minScore = qaRetrievalMinScore(env);
+  const matches = allMatches.filter((m) => m.score >= minScore);
   if (matches.length === 0) return [];
 
   const scoreByVectorId = new Map(matches.map((m) => [m.id, m.score]));

@@ -53,6 +53,7 @@ export interface TestEnvParts {
   AI?: unknown;
   GEMINI_API_KEY?: string;
   QA_RETRIEVAL_TOP_N?: string;
+  QA_RETRIEVAL_MIN_SCORE?: string;
 }
 
 /** An Env with every binding stubbed; pass overrides (or undefined) per test. */
@@ -63,6 +64,7 @@ export function testEnv(parts: TestEnvParts = {}): Env {
     AI: "AI" in parts ? parts.AI : fakeAi(),
     GEMINI_API_KEY: "GEMINI_API_KEY" in parts ? parts.GEMINI_API_KEY : "test-key",
     QA_RETRIEVAL_TOP_N: parts.QA_RETRIEVAL_TOP_N,
+    QA_RETRIEVAL_MIN_SCORE: parts.QA_RETRIEVAL_MIN_SCORE,
   } as unknown as Env;
 }
 

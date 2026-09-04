@@ -103,4 +103,78 @@ describe("retrieveLessons", () => {
     // the index's dimension was produced and handed to query().
     expect((query.mock.calls[0][0] as number[]).length).toBe(768);
   });
+
+  it("drops a match below the configured relevance floor", async () => {
+    await correction("c1", "v1", "Strong match.");
+    await correction("c2", "v2", "Weak match.");
+
+    const vec = fakeVectorize();
+    vec.nextMatches = [
+      { id: "v1", score: 0.8 },
+      { id: "v2", score: 0.2 },
+    ];
+
+    const lessons = await retrieveLessons(
+      testEnv({ DB: db.d1, VECTORIZE: vec, QA_RETRIEVAL_MIN_SCORE: "0.5" }),
+      "context",
+      4,
+    );
+    expect(lessons.map((l) => l.correctionId)).toEqual(["c1"]);
+  });
+
+  it("never looks up a below-floor match's D1 row", async () => {
+    await correction("c1", "v1", "Weak match.");
+
+    const vec = fakeVectorize();
+    vec.nextMatches = [{ id: "v1", score: 0.1 }];
+    const d1Get = vi.spyOn(db.d1, "prepare");
+
+    const lessons = await retrieveLessons(
+      testEnv({ DB: db.d1, VECTORIZE: vec, QA_RETRIEVAL_MIN_SCORE: "0.5" }),
+      "context",
+      4,
+    );
+
+    expect(lessons).toEqual([]);
+    expect(d1Get).not.toHaveBeenCalled();
+  });
+
+  it("keeps a match exactly at the floor", async () => {
+    await correction("c1", "v1", "Borderline match.");
+
+    const vec = fakeVectorize();
+    vec.nextMatches = [{ id: "v1", score: 0.5 }];
+
+    const lessons = await retrieveLessons(
+      testEnv({ DB: db.d1, VECTORIZE: vec, QA_RETRIEVAL_MIN_SCORE: "0.5" }),
+      "context",
+      4,
+    );
+    expect(lessons.map((l) => l.correctionId)).toEqual(["c1"]);
+  });
+
+  it("defaults to a permissive floor that keeps ordinary matches", async () => {
+    await correction("c1", "v1", "Ordinary match.");
+
+    const vec = fakeVectorize();
+    vec.nextMatches = [{ id: "v1", score: 0.05 }];
+
+    const lessons = await retrieveLessons(testEnv({ DB: db.d1, VECTORIZE: vec }), "context", 4);
+    expect(lessons.map((l) => l.correctionId)).toEqual(["c1"]);
+  });
+
+  it("returning nothing above the floor is not an error — QA can still fall back to general judgement", async () => {
+    await correction("c1", "v1", "Weak match.");
+
+    const vec = fakeVectorize();
+    vec.nextMatches = [{ id: "v1", score: -0.5 }];
+
+    await expect(
+      retrieveLessons(
+        testEnv({ DB: db.d1, VECTORIZE: vec, QA_RETRIEVAL_MIN_SCORE: "0.5" }),
+        "context",
+        4,
+      ),
+    ).resolves.toEqual([]);
+  });
 });
