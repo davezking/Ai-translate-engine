@@ -22,6 +22,15 @@ function okResponse(text: string) {
   });
 }
 
+function truncatedResponse(text: string) {
+  return new Response(
+    JSON.stringify({
+      candidates: [{ content: { parts: [{ text }] }, finishReason: "MAX_TOKENS" }],
+    }),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
+
 async function runWithFakeTimers<T>(work: () => Promise<T>): Promise<T> {
   vi.useFakeTimers();
   try {
@@ -142,5 +151,51 @@ describe("generateText model chain", () => {
     const text = await runWithFakeTimers(() => generateText(testEnv(), "system", "user content"));
     expect(text).toBe("ok");
     expect(fallback2Calls).toBe(2);
+  });
+
+  it("throws on a truncated (MAX_TOKENS) response instead of returning the partial text", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      calls.push(tierOf(url));
+      return truncatedResponse("this article got cut off half");
+    });
+
+    await expect(generateText(testEnv(), "system", "user content")).rejects.toThrow(
+      /truncated.*MAX_TOKENS/i,
+    );
+    // Truncation is a hard failure, not advanceable/retryable: only the primary is tried,
+    // no fallback and no retry-with-backoff budget spent chasing a truncation that a
+    // smaller model can't fix either.
+    expect(calls).toEqual(["primary"]);
+  });
+
+  it("does not advance the chain or retry on a truncated final-model response", async () => {
+    let fallback2Calls = 0;
+    vi.stubGlobal("fetch", async (url: string) => {
+      const tier = tierOf(url);
+      if (tier === "primary") return new Response("high demand", { status: 503 });
+      if (tier === "fallback1") return new Response("model not found", { status: 404 });
+      fallback2Calls++;
+      return truncatedResponse("cut off");
+    });
+
+    await expect(
+      runWithFakeTimers(() => generateText(testEnv(), "system", "user content")),
+    ).rejects.toThrow(/truncated.*MAX_TOKENS/i);
+    expect(fallback2Calls).toBe(1);
+  });
+
+  it("accepts a normal response with finishReason STOP", async () => {
+    vi.stubGlobal("fetch", async () => {
+      return new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: "all good" }] }, finishReason: "STOP" }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    const text = await generateText(testEnv(), "system", "user content");
+    expect(text).toBe("all good");
   });
 });

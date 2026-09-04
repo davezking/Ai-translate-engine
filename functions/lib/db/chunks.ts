@@ -38,6 +38,11 @@ export async function getChunk(
   return row ?? null;
 }
 
+/**
+ * A fresh translation invalidates any prior per-chunk QA output (it QA'd the
+ * old amharic_text, not this one), so amharic_qa is cleared back to NULL here
+ * rather than left stale.
+ */
 export async function setChunkTranslation(
   d1: D1Database,
   id: string,
@@ -46,10 +51,15 @@ export async function setChunkTranslation(
 ): Promise<void> {
   await d1
     .prepare(
-      "UPDATE chunks SET amharic_text = ?, status = 'translated', english_hash = ? WHERE id = ?",
+      "UPDATE chunks SET amharic_text = ?, status = 'translated', english_hash = ?, amharic_qa = NULL WHERE id = ?",
     )
     .bind(amharicText, englishHash, id)
     .run();
+}
+
+/** Stores this chunk's per-chunk QA output (migration 0009). */
+export async function setChunkQa(d1: D1Database, id: string, amharicQa: string): Promise<void> {
+  await d1.prepare("UPDATE chunks SET amharic_qa = ? WHERE id = ?").bind(amharicQa, id).run();
 }
 
 export async function setChunkStatus(d1: D1Database, id: string, status: string): Promise<void> {
@@ -81,6 +91,9 @@ export async function saveChunkBoundaries(
       amharicText: unchanged && prior ? prior.amharic_text : null,
       status: unchanged && prior ? prior.status : "proposed",
       englishHash: unchanged && prior ? prior.english_hash : null,
+      // Same "unchanged carries forward, changed resets" rule as amharic_text:
+      // a chunk's prior QA output is only valid for its prior text.
+      amharicQa: unchanged && prior ? prior.amharic_qa : null,
     };
   });
 
@@ -89,9 +102,18 @@ export async function saveChunkBoundaries(
     ...rows.map((r) =>
       d1
         .prepare(
-          "INSERT INTO chunks (id, article_id, ord, english_text, amharic_text, status, english_hash) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO chunks (id, article_id, ord, english_text, amharic_text, status, english_hash, amharic_qa) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         )
-        .bind(r.id, articleId, r.ord, r.englishText, r.amharicText, r.status, r.englishHash),
+        .bind(
+          r.id,
+          articleId,
+          r.ord,
+          r.englishText,
+          r.amharicText,
+          r.status,
+          r.englishHash,
+          r.amharicQa,
+        ),
     ),
   ];
   await d1.batch(statements);

@@ -40,6 +40,9 @@ export const onRequestPost: PagesFunction<Env, string, AuthedData> = async (cont
       score: l.score,
     })),
     styleApplied: outcome.styleApplied,
+    // Chunks whose own QA pass failed and fell back to their plain translation
+    // (pipeline order: one chunk failing never fails the whole pass).
+    failedOrds: outcome.failedOrds,
     ...(outcome.retrievalError ? { retrievalError: outcome.retrievalError } : {}),
   });
 };

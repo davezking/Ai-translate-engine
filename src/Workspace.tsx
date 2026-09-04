@@ -607,9 +607,15 @@ function TranslateStage({
       return;
     setReassembling(true);
     try {
-      const { amharicDraft, qa, qaError } = await reassemble(articleId);
+      const { amharicDraft, qa, qaError, failedOrds } = await reassemble(articleId);
       onArticleChange({ ...article, amharic_draft: amharicDraft, status: qa ? "qad" : "drafted" });
-      if (qa) {
+      if (qa && failedOrds && failedOrds.length > 0) {
+        const positions = failedOrds.map((ord) => ord + 1).join(", ");
+        toast(
+          `Reassembled and QA'd, but section${failedOrds.length > 1 ? "s" : ""} ${positions} kept the plain translation (QA failed for ${failedOrds.length > 1 ? "them" : "it"}).`,
+          "err",
+        );
+      } else if (qa) {
         toast("All chunks translated, reassembled, and QA'd.");
       } else {
         toast(

@@ -207,6 +207,8 @@ Shape only, not exhaustive CRUD. All under `/api`, all behind Cloudflare Access;
 - **Style-profile fidelity is unproven.** Whether derived guidelines actually shift tone needs a real-sample check. Mitigated by building + approving one profile early (P3/P4 spike) before the feature is "done."
 - **Vectorize free-tier latency at growth.** Fine at hundreds of vectors; revisit only if the library grows large.
 - **Workers-runtime library gaps.** Some Node-only libraries won't run on the Workers runtime; prefer Web-standard APIs and Cloudflare bindings. Low risk given the thin dependency set.
+- **Long articles dilute both QA and retrieval.** QA and retrieval currently run once per article, over the whole reassembled text. On a ~3000-word article the single retrieval query is a blurry average of several sub-topics, the 4 retrieved lessons are a small fraction of the prompt, and Gemini's attention is known to weaken toward the end of a long output — a truncated response (see the guard below) is also more likely, since Amharic/Ge'ez costs more output tokens per word than English. Planned mitigation: move QA to run per-chunk (Phase 5), which sharpens retrieval, raises the lessons' proportional weight, and removes the tail-attention effect, at the cost of ~N Gemini calls instead of 1 per article.
+- **A truncated Gemini response must never be saved as if complete.** Any Gemini call — QA, translate, or the finalize compare — can hit the model's output-token ceiling on a large response and return a partial result with `finishReason: "MAX_TOKENS"`. Guarded in `functions/lib/gemini.ts`: `generateText()` treats `MAX_TOKENS` as a hard failure (never advances the model chain, since a fallback's budget is no larger), so a caller's existing "leave state untouched on failure" handling protects the draft — without the check, a cut-off QA response would silently overwrite `amharic_qa` with half an article.
 
 ---
 
@@ -271,3 +273,13 @@ Phases are sequenced so each ends with something testable end-to-end, and the tw
 - Edit split/translate/QA prompts (admin-only)
 - Version history on every publish
 - Rollback by pointing `current_version_id` at an older version
+
+## Phase 5 — QA robustness at length
+*Goal: QA and retrieval hold up as well on a ~3000-word article as they do on a short one, with no silent data loss along the way.*
+
+Post-launch phase, prompted by measuring RAG/QA quality on long articles (see Risks §10). Sequenced so the cheap, self-contained safety fix ships first and the pipeline-shaped change is isolated and easy to roll back independently.
+
+**Sprint 5.1 — Truncation guard + per-chunk QA + retrieval relevance floor**
+- Truncation guard: `generateText()` fails loudly on a `MAX_TOKENS` response instead of returning partial text (protects QA, translate, and finalize compare alike)
+- Per-chunk QA: run the QA pass per chunk instead of once over the reassembled article, so retrieval, lesson weight, and model attention don't dilute on long articles; each chunk keeps its plain translation and is flagged for the reviewer if its QA pass fails, same "one failure never fails the article" posture as translate
+- Retrieval relevance floor: `retrieveLessons()` drops matches below a similarity threshold instead of always returning top-N regardless of fit

@@ -21,7 +21,7 @@ const MAX_ATTEMPTS = 4;
 const BASE_DELAY_MS = 1000;
 
 interface GeminiResponse {
-  candidates?: { content?: { parts?: { text?: string }[] } }[];
+  candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
 }
 
 export interface GenerateTextOptions {
@@ -95,7 +95,16 @@ async function callModel(
     }
 
     const data = (await res.json()) as GeminiResponse;
-    const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+    const candidate = data.candidates?.[0];
+    const text = candidate?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+    // A response cut off by the model's output-token ceiling is never usable, however
+    // much text it produced — never a retryable/advanceable case (a fallback model has
+    // an equal or smaller budget, so trying it wouldn't help) or, worse, silently saved
+    // as if complete. Amharic/Ge'ez costs more output tokens per word than English, so
+    // this is more likely on long articles.
+    if (candidate?.finishReason === "MAX_TOKENS") {
+      throw new Error(`Gemini response was truncated (MAX_TOKENS) [model=${model}]`);
+    }
     if (!text.trim()) throw new Error(`Gemini returned an empty response [model=${model}]`);
     return text;
   }
