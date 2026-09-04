@@ -2,7 +2,6 @@ import type { Env } from "./env";
 import { geminiKey } from "./env";
 
 const PRIMARY_MODEL = "gemini-3.6-flash";
-const FALLBACK_MODEL = "gemini-3.6-flash-lite";
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
 // Transient upstream failures (overload, rate limit, momentary infra hiccups) are worth
@@ -19,9 +18,6 @@ export interface GenerateTextOptions {
   responseMimeType?: string;
   temperature?: number;
 }
-
-/** Thrown only for a retryable status (429/5xx); lets generateText decide to fall back. */
-class RetryableGeminiError extends Error {}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -56,7 +52,7 @@ async function callModel(
     },
   };
 
-  let lastError: RetryableGeminiError | null = null;
+  let lastError: Error | null = null;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const res = await fetch(url, {
@@ -73,12 +69,9 @@ async function callModel(
       const detail = errText
         ? errText.slice(0, 500)
         : `empty body, content-type=${res.headers.get("content-type") ?? "none"}, statusText=${res.statusText || "none"}`;
-      const message = `Gemini request failed (${res.status}) [model=${model}]: ${detail}`;
+      lastError = new Error(`Gemini request failed (${res.status}) [model=${model}]: ${detail}`);
 
-      if (!RETRYABLE_STATUSES.has(res.status)) throw new Error(message);
-
-      lastError = new RetryableGeminiError(message);
-      if (attempt < maxAttempts - 1) {
+      if (RETRYABLE_STATUSES.has(res.status) && attempt < maxAttempts - 1) {
         await sleep(retryDelayMs(res, attempt));
         continue;
       }
@@ -99,12 +92,16 @@ async function callModel(
  * carries the task's prompt body loaded from the `prompts` table by the caller — this
  * module never hardcodes prompt text, only the wire format for talking to Gemini.
  *
- * Resilience against transient upstream failures (503 "high demand", 429 rate limits, 5xx)
- * has two layers: the primary model (gemini-3.6-flash) gets one attempt, and on any
- * retryable failure we immediately fall back to gemini-3.6-flash-lite — a separate,
- * lighter-tier model likely to have its own capacity — which then gets the full
- * MAX_ATTEMPTS retry-with-backoff budget before giving up. A non-retryable error (bad
- * request, empty output) is not worth re-trying on a different model and throws right away.
+ * Transient failures (503 "high demand", 429 rate limits, 5xx) are retried with backoff
+ * up to MAX_ATTEMPTS before giving up, since callers otherwise fail an entire pipeline
+ * step (translate/QA/etc.) on what is often a momentary spike.
+ *
+ * NOTE: an earlier revision of this function fell back to a second, lighter-tier model
+ * (`gemini-3.6-flash-lite`) after the primary model's first failure. That model ID does
+ * not exist for this API version (confirmed via a live 404 "is not found ... or is not
+ * supported for generateContent" response) and has been removed. Don't reintroduce a
+ * fallback model without first confirming its exact ID against the real ListModels
+ * response for this project's API key/version.
  */
 export async function generateText(
   env: Env,
@@ -112,17 +109,5 @@ export async function generateText(
   userContent: string,
   options: GenerateTextOptions = {},
 ): Promise<string> {
-  try {
-    return await callModel(env, PRIMARY_MODEL, systemInstruction, userContent, options, 1);
-  } catch (err) {
-    if (!(err instanceof RetryableGeminiError)) throw err;
-    return await callModel(
-      env,
-      FALLBACK_MODEL,
-      systemInstruction,
-      userContent,
-      options,
-      MAX_ATTEMPTS,
-    );
-  }
+  return callModel(env, PRIMARY_MODEL, systemInstruction, userContent, options, MAX_ATTEMPTS);
 }
