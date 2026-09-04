@@ -279,6 +279,7 @@ export default function Workspace({
           articleId={articleId}
           article={article}
           onArticleChange={setArticle}
+          onChunksChange={(list) => setChunks(fromChunkDTOs(list))}
           onBackToSplit={() => setStage("split")}
           onContinueToReview={canReview ? () => setStage("review") : undefined}
         />
@@ -575,12 +576,14 @@ function TranslateStage({
   articleId,
   article,
   onArticleChange,
+  onChunksChange,
   onBackToSplit,
   onContinueToReview,
 }: {
   articleId: string;
   article: ArticleDTO;
   onArticleChange: (a: ArticleDTO) => void;
+  onChunksChange?: (chunks: ChunkDTO[]) => void;
   onBackToSplit: () => void;
   onContinueToReview?: () => void;
 }) {
@@ -601,6 +604,15 @@ function TranslateStage({
       cancelled = true;
     };
   }, [articleId]);
+
+  // Keep the parent's chunk state in sync as translation progresses, so its
+  // derived translateDone/canReview (which gate the stepper's Review step and
+  // the "Continue to review" button) update live instead of only after a reload.
+  const onChunksChangeRef = useRef(onChunksChange);
+  onChunksChangeRef.current = onChunksChange;
+  useEffect(() => {
+    if (!loading) onChunksChangeRef.current?.(state);
+  }, [state, loading]);
 
   async function maybeReassemble(list: (ChunkDTO & { translateError?: string })[]) {
     if (list.length === 0 || !list.every((c) => c.status === "translated" && c.amharic_text))
