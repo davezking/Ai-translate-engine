@@ -18,15 +18,15 @@ The distinguishing feature is a **self-improving QA loop**: every time a human f
 
 ## 2. Chosen stack & rationale
 
-| Layer | Choice | Why it fits *this* project |
-|---|---|---|
-| Hosting + API | Cloudflare Pages + Workers | Workers bill by CPU time, not wall-clock, so multi-second Gemini translation/QA calls don't hit a request-timeout wall the way they would on a serverless free tier with a hard 10s cap. One vendor for app + data + vectors. |
-| Database | Cloudflare D1 (SQLite) | The data is relational — articles→chunks, prompts→promptVersions, articles→corrections. SQL models this directly and makes prompt version-history/rollback trivial (a WHERE on a version table). Free tier is ample for 2 users. |
-| Vector search | Cloudflare Vectorize | Native nearest-neighbour query. No hand-rolled cosine-similarity code, no free-tier vector-search gap to engineer around. Lives on the same platform as everything else. |
-| Embeddings | Cloudflare Workers AI | Generates embedding vectors for correction summaries on-platform, no second AI vendor for this step. (Gemini embeddings remain a drop-in fallback.) |
-| Language AI | Google Gemini API | Translation, QA, AI-assisted splitting, style-profile extraction, and the finalize-time comparison (change summary + fix count). |
-| Auth | Cloudflare Access | Two fixed users; Access gates the whole app at the edge with Google sign-in and needs no in-app session code. Admin is one identity, checked in a `users` table for role-gated routes. |
-| Framework | A Pages app (React frontend) with Workers/Functions for server routes | Keeps frontend and API in one deploy. Server routes hold the Gemini key and all D1/Vectorize access; the client never sees a secret. |
+| Layer         | Choice                                                                | Why it fits _this_ project                                                                                                                                                                                                       |
+| ------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hosting + API | Cloudflare Pages + Workers                                            | Workers bill by CPU time, not wall-clock, so multi-second Gemini translation/QA calls don't hit a request-timeout wall the way they would on a serverless free tier with a hard 10s cap. One vendor for app + data + vectors.    |
+| Database      | Cloudflare D1 (SQLite)                                                | The data is relational — articles→chunks, prompts→promptVersions, articles→corrections. SQL models this directly and makes prompt version-history/rollback trivial (a WHERE on a version table). Free tier is ample for 2 users. |
+| Vector search | Cloudflare Vectorize                                                  | Native nearest-neighbour query. No hand-rolled cosine-similarity code, no free-tier vector-search gap to engineer around. Lives on the same platform as everything else.                                                         |
+| Embeddings    | Cloudflare Workers AI                                                 | Generates embedding vectors for correction summaries on-platform, no second AI vendor for this step. (Gemini embeddings remain a drop-in fallback.)                                                                              |
+| Language AI   | Google Gemini API                                                     | Translation, QA, AI-assisted splitting, style-profile extraction, and the finalize-time comparison (change summary + fix count).                                                                                                 |
+| Auth          | Cloudflare Access                                                     | Two fixed users; Access gates the whole app at the edge with Google sign-in and needs no in-app session code. Admin is one identity, checked in a `users` table for role-gated routes.                                           |
+| Framework     | A Pages app (React frontend) with Workers/Functions for server routes | Keeps frontend and API in one deploy. Server routes hold the Gemini key and all D1/Vectorize access; the client never sees a secret.                                                                                             |
 
 **Rejected / deferred (from PRD):** Firestore + Firebase Auth (replaced by D1 + Access to stay single-vendor and dodge Firebase-on-Workers friction); in-app cosine similarity (replaced by Vectorize); file upload and Google Docs API (paste-only input); model fine-tuning (RAG instead).
 
@@ -49,8 +49,8 @@ flowchart TD
       RE --> QA[QA pass<br/>tone + retrieved lessons]
       QA --> ED[Side-by-side editor<br/>autosave]
       ED --> FIN[Finalize]
-      FIN --> CMP[Gemini compare<br/>summary + fix count]
-      CMP --> LIB[Store correction<br/>+ embed to Vectorize]
+      FIN --> CMP[Gemini compare<br/>summary + fix count + per-fix breakdown]
+      CMP --> LIB[Store one correction per fix<br/>+ embed each to Vectorize]
     end
 
     W -.orchestrates.- Pipeline
@@ -134,9 +134,14 @@ erDiagram
 ```
 
 Notes:
+
 - `chunks.status` and `chunks.amharic_text` let a single chunk fail/retry without touching the rest of the article (PRD error-handling requirement).
 - `corrections.vector_id` is the handle into Vectorize; the embedding itself lives in Vectorize, not D1.
-- `corrections.fix_categories` is a JSON array of `{category, detail}` (migration 0008) — one entry per fix counted in that finalize's `fix_count`, tagged with a linguistic category (punctuation, grammar-suffix, wording, tone, clause, other) by the same compare call. Nullable: rows captured before migration 0008 have no breakdown.
+- **One correction row per fix (per-fix capture).** A finalize whose compare reports N fixes writes **N** `corrections` rows — one sharp, single-topic lesson each, embedded on the fix's English anchor (see below) — instead of one blurry whole-article summary. That is why `articles ||--o{ corrections` is one-to-many. Retrieval is per-chunk (English), so per-fix lessons match precise chunks far better than a single averaged article vector would. No schema change was needed — the existing columns carry it.
+  - `change_summary`: the retrievable lesson for that one fix, phrased actionably (e.g. `When translating about "greeting an elder": use the respectful verb form`). Embedded English-first (`englishAnchor` + `detail`) so its vector lands near future English chunk queries.
+  - `fix_categories`: a **single-element** JSON `{category, detail, englishAnchor}` array — that row's own fix (still a `FixDetail[]`, so the `/corrections` view is unchanged). `englishAnchor` is a short English phrase naming the source concept the fix concerns; `""` when the model omits it.
+  - **Fallback:** if compare reports `fix_count > 0` but omits/malforms the per-fix breakdown, one row is written from the whole-article `change_summary` with `fix_categories = null` — the lesson is never lost. Rows captured before per-fix capture (or before migration 0008) are the same shape: one whole-article row, `fix_categories` null.
+- **Embedding is batched:** all of a finalize's per-fix lessons are embedded in one Workers AI call (`embedTexts`), upserted in one Vectorize call, and written in one D1 `batch()` transaction, with full vector rollback if the D1 write fails — so capture stays 1:1 (Hard rule 3) at set granularity and a fix-heavy article stays well under the Workers 50-subrequest ceiling.
 - `styleProfiles.approved` supports the "validate one profile early before it's considered done" requirement.
 - `prompts.current_version_id` pointing at a `promptVersions` row makes rollback a single-field update — no history is destroyed.
 - Array-ish fields (`sample_articles`) are stored as JSON text in SQLite.
@@ -146,6 +151,7 @@ Notes:
 Shape only, not exhaustive CRUD. All under `/api`, all behind Cloudflare Access; admin routes additionally check `users.role = 'admin'`.
 
 **Pipeline**
+
 - `POST /api/articles` — create from pasted English; returns article id.
 - `POST /api/articles/:id/split` — AI-assisted split into chunks; returns proposed boundaries.
 - `PUT  /api/articles/:id/chunks` — save operator-adjusted boundaries.
@@ -154,15 +160,18 @@ Shape only, not exhaustive CRUD. All under `/api`, all behind Cloudflare Access;
 - `POST /api/articles/:id/qa` — run QA pass; applies selected style profile + top-N retrieved lessons.
 
 **Review & finalize**
+
 - `PATCH /api/articles/:id/draft` — autosave reviewer's current Amharic text.
 - `GET   /api/articles/:id` — load article + latest saved draft for restore-on-reload.
-- `POST  /api/articles/:id/finalize` — store final; trigger Gemini compare → change summary + fix count → write `corrections` row + embed to Vectorize.
+- `POST  /api/articles/:id/finalize` — store final; trigger Gemini compare → change summary + fix count + per-fix breakdown → write one `corrections` row per fix + embed each to Vectorize.
 
 **Learning & metrics**
-- `POST /api/seed` — accept one (English, AI-translation, human-final) triple; run compare, store correction, embed. Called 50+ times to bootstrap.
+
+- `POST /api/seed` — accept one (English, AI-translation, human-final) triple; run compare, store one correction per fix, embed each. Called 50+ times to bootstrap. Shares the exact compare→per-fix-capture path as live finalize (no fork).
 - `GET  /api/metrics/fixes` — fixes-per-article series for the trend view.
 
 **Style & prompts (admin)**
+
 - `POST /api/styles` — derive a style profile from pasted samples.
 - `PATCH /api/styles/:id/approve` — mark a profile validated.
 - `GET  /api/styles` — list for selection.
@@ -202,7 +211,7 @@ Shape only, not exhaustive CRUD. All under `/api`, all behind Cloudflare Access;
 
 ## 10. Risks & open questions
 
-- **Retrieval quality is the whole learning promise.** If top-N summaries aren't relevant, QA won't improve. Mitigated by loading the 50+ seed examples first (P3) so retrieval is tested on real data before launch. Open: does embedding the *summary* out-retrieve embedding article context? Validate with seeds; tune N (3–5).
+- **Retrieval quality is the whole learning promise.** If top-N summaries aren't relevant, QA won't improve. Mitigated by loading the 50+ seed examples first (P3) so retrieval is tested on real data before launch, and by **per-fix capture**: each lesson is now a single fix embedded on its English anchor (the source concept it concerns), rather than one averaged whole-article summary, so a per-chunk English query matches a precise lesson instead of a blur. Open: validate anchor quality and tune N (3–5) once seeds are loaded; a weak or missing anchor falls back to the fix detail, never worse than the old single-vector behaviour.
 - **Fix-count stability.** An AI comparison may vary run-to-run. Define "one fix" precisely in the compare prompt and spot-check early. A plain diff remains a cheap fallback for the count only.
 - **Style-profile fidelity is unproven.** Whether derived guidelines actually shift tone needs a real-sample check. Mitigated by building + approving one profile early (P3/P4 spike) before the feature is "done."
 - **Vectorize free-tier latency at growth.** Fine at hundreds of vectors; revisit only if the library grows large.
@@ -219,20 +228,24 @@ Phases are sequenced so each ends with something testable end-to-end, and the tw
 **Repo context:** a root `CLAUDE.md` holds the standing rules every Claude Code session should load (stack, hard rules, pipeline order, Ge'ez handling, the D1↔Vectorize consistency contract). The per-sprint prompt files carry the task; `CLAUDE.md` carries the rules — keep it at the repo root from Sprint 1.1 onward.
 
 **Model tiering:** each task in the per-sprint prompt files is tagged with a model tier, a specific model ID/version, and a reasoning-effort level. Switch models in Claude Code with `/model <alias-or-id>` before starting a sprint's prompts (or `--model` on a headless run); set effort with the `/effort` control (or the equivalent flag) where your client supports it. Tiers used:
+
 - **Haiku** (`claude-haiku-4-5`) — mechanical scaffolding, config, simple UI/CRUD.
 - **Sonnet** (`claude-sonnet-5`) — default for feature work, business logic, most endpoints.
 - **Opus** (`claude-opus-4-8`) — decisions costly to unwind: schema, retrieval/RAG wiring, auth, the pipeline orchestration and compare logic.
 
 ## Phase 1 — Foundation & pipeline
-*Goal: an article goes English-in → Amharic-draft-out.*
+
+_Goal: an article goes English-in → Amharic-draft-out._
 
 **Sprint 1.1 — Project & data foundation**
+
 - Scaffold Cloudflare Pages + Functions app with React frontend
 - Configure Wrangler bindings (D1, Vectorize, Workers AI, Gemini secret)
 - Author D1 schema + first migration (all tables)
 - Cloudflare Access setup + `users` role lookup middleware
 
 **Sprint 1.2 — Ingest, split, translate, reassemble**
+
 - Paste-text ingestion + create-article endpoint
 - AI-assisted chunk splitting (500–800+ words, boundary-safe)
 - Editable chunk-boundary UI
@@ -240,46 +253,63 @@ Phases are sequenced so each ends with something testable end-to-end, and the tw
 - Reassemble chunks into ordered Amharic draft
 
 ## Phase 2 — Review & autosave
-*Goal: a human can review and safely edit the draft.*
+
+_Goal: a human can review and safely edit the draft._
 
 **Sprint 2.1 — Reviewer editor + autosave**
+
 - Side-by-side English/Amharic editor
 - Local draft buffer + debounced minutes-order autosave to D1
 - Restore-on-reload from latest saved draft
 - Finalize action (stores human-final, sets status)
 
 ## Phase 3 — Learning loop (de-risk early)
-*Goal: corrections captured and fed back; retrieval proven on real data.*
+
+_Goal: corrections captured and fed back; retrieval proven on real data._
 
 **Sprint 3.1 — Compare, store, embed**
+
 - Finalize-time Gemini compare → change summary + fix count
 - Store `corrections` row; embed summary via Workers AI → Vectorize upsert
 - Seed intake endpoint + UI for 50+ triples (runs the same compare/embed)
 
 **Sprint 3.2 — Retrieval into QA + metrics**
+
 - QA pass endpoint that retrieves top-N summaries from Vectorize and injects them
 - Wire QA into the pipeline after reassemble
 - Fixes-per-article trend view
 
 ## Phase 4 — Tone & prompt engine
-*Goal: output matches a writer's voice; admin tunes without a deploy.*
+
+_Goal: output matches a writer's voice; admin tunes without a deploy._
 
 **Sprint 4.1 — Writer style profiles**
+
 - Derive style profile (guidelines) from pasted samples
 - Early single-profile quality check + approve flow
 - Style selection applied in the QA prompt
 
 **Sprint 4.2 — Admin prompt engine**
+
 - Edit split/translate/QA prompts (admin-only)
 - Version history on every publish
 - Rollback by pointing `current_version_id` at an older version
 
 ## Phase 5 — QA robustness at length
-*Goal: QA and retrieval hold up as well on a ~3000-word article as they do on a short one, with no silent data loss along the way.*
+
+_Goal: QA and retrieval hold up as well on a ~3000-word article as they do on a short one, with no silent data loss along the way._
 
 Post-launch phase, prompted by measuring RAG/QA quality on long articles (see Risks §10). Sequenced so the cheap, self-contained safety fix ships first and the pipeline-shaped change is isolated and easy to roll back independently.
 
 **Sprint 5.1 — Truncation guard + per-chunk QA + retrieval relevance floor**
+
 - Truncation guard: `generateText()` fails loudly on a `MAX_TOKENS` response instead of returning partial text (protects QA, translate, and finalize compare alike)
 - Per-chunk QA: run the QA pass per chunk instead of once over the reassembled article, so retrieval, lesson weight, and model attention don't dilute on long articles; each chunk keeps its plain translation and is flagged for the reviewer if its QA pass fails, same "one failure never fails the article" posture as translate
 - Retrieval relevance floor: `retrieveLessons()` drops matches below a similarity threshold instead of always returning top-N regardless of fit
+
+**Sprint 5.2 — Per-fix correction capture (write-side granularity)**
+
+- The read side (QA/retrieval) went per-chunk in 5.1, but capture still stored one blurry whole-article lesson per finalize. Compare now returns an `englishAnchor` per fix, and capture stores **one `corrections` row + one vector per fix** (embedded English-first on the anchor), so the library holds sharp, single-topic lessons that per-chunk English queries actually match. Falls back to the whole-article summary when the model omits the breakdown, so no lesson is ever lost.
+- No migration: reuses the existing `corrections` columns (`fix_categories` now carries that row's single fix). Existing whole-article rows stay valid and retrievable; the library is simply mixed old/new.
+- Batched writes: all of a finalize's lessons embed in one Workers AI call (`embedTexts`), upsert in one Vectorize call, and insert in one D1 `batch()` — with full vector rollback on D1 failure — keeping D1↔Vectorize 1:1 and staying under the Workers 50-subrequest ceiling.
+- Deferred: idempotent re-capture on retry (a `pending`→retry re-runs compare and could duplicate rows for already-captured fixes — same limitation as the pre-5.2 single-vector path; revisit if retries become common). Optional follow-up: a one-off admin backfill re-capturing seed articles per-fix and pruning their old whole-article rows.

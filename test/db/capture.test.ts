@@ -12,6 +12,7 @@ beforeEach(async () => {
 });
 afterEach(() => db.close());
 
+/** No per-fix breakdown — exercises the whole-article fallback (one lesson). */
 const input = {
   articleId: "art-1",
   changeSummary: "Reviewer replaced the literal verb with the idiomatic one.",
@@ -19,23 +20,112 @@ const input = {
   fixes: [],
 };
 
-describe("captureCorrection", () => {
+/** Two fixes — exercises the normal per-fix path (one lesson each). */
+const twoFixes = {
+  articleId: "art-1",
+  changeSummary: "Two unrelated fixes across the article.",
+  topicTag: "mixed",
+  fixes: [
+    {
+      category: "wording" as const,
+      detail: "Replaced literal verb with idiomatic one",
+      englishAnchor: "announcing a policy",
+    },
+    {
+      category: "grammar-suffix" as const,
+      detail: "Fixed subject agreement suffix",
+      englishAnchor: "the minister",
+    },
+  ],
+};
+
+describe("captureCorrection — per-fix", () => {
+  it("writes one vector and one row per fix, each pointing at the other", async () => {
+    const vec = fakeVectorize();
+    const result = await captureCorrection(testEnv({ DB: db.d1, VECTORIZE: vec }), twoFixes);
+
+    expect(result.vectorIds).toHaveLength(2);
+    expect(result.correctionIds).toHaveLength(2);
+    expect(vec.upserted).toHaveLength(2);
+    expect(vec.upserted.map((v) => v.id).sort()).toEqual([...result.vectorIds].sort());
+
+    const rows = await listCorrections(db.d1);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.vector_id).sort()).toEqual([...result.vectorIds].sort());
+  });
+
+  it("stores each fix's own breakdown and anchors its lesson on the english anchor", async () => {
+    await captureCorrection(testEnv({ DB: db.d1, VECTORIZE: fakeVectorize() }), twoFixes);
+    const rows = await listCorrections(db.d1);
+
+    const wording = rows.find((r) => r.change_summary.includes("idiomatic"));
+    expect(wording?.change_summary).toBe(
+      'When translating about "announcing a policy": Replaced literal verb with idiomatic one',
+    );
+    // fix_categories on each row is that ONE fix, wrapped as a FixDetail[].
+    expect(JSON.parse(wording?.fix_categories as string)).toEqual([twoFixes.fixes[0]]);
+  });
+
+  it("embeds every fix in a single Workers AI call", async () => {
+    let runCalls = 0;
+    let lastText: unknown;
+    const ai = {
+      async run(_model: string, opts: { text?: string | string[] }) {
+        runCalls += 1;
+        lastText = opts.text;
+        const count = Array.isArray(opts.text) ? opts.text.length : 1;
+        return { data: Array.from({ length: count }, () => new Array(768).fill(0.01)) };
+      },
+    };
+    await captureCorrection(testEnv({ DB: db.d1, VECTORIZE: fakeVectorize(), AI: ai }), twoFixes);
+
+    expect(runCalls).toBe(1);
+    expect(Array.isArray(lastText)).toBe(true);
+    expect(lastText).toHaveLength(2);
+  });
+
+  it("tags every vector with its article for traceability", async () => {
+    const vec = fakeVectorize();
+    await captureCorrection(testEnv({ DB: db.d1, VECTORIZE: vec }), twoFixes);
+    for (const v of vec.upserted) {
+      expect(v.metadata).toEqual({ article_id: "art-1", topic_tag: "mixed" });
+    }
+  });
+
+  it("rolls back every vector when the D1 batch fails, leaving no orphan", async () => {
+    const vec = fakeVectorize();
+    await expect(
+      captureCorrection(testEnv({ DB: db.d1, VECTORIZE: vec }), {
+        ...twoFixes,
+        articleId: "ghost",
+      }),
+    ).rejects.toThrow();
+
+    expect(await countCorrections(db.d1)).toBe(0);
+    expect(vec.deleted.sort()).toEqual(vec.upserted.map((v) => v.id).sort());
+  });
+});
+
+describe("captureCorrection — whole-article fallback (no per-fix breakdown)", () => {
   it("writes exactly one vector and one row that point at each other", async () => {
     const vec = fakeVectorize();
     const result = await captureCorrection(testEnv({ DB: db.d1, VECTORIZE: vec }), input);
 
+    expect(result.vectorIds).toHaveLength(1);
     expect(vec.upserted).toHaveLength(1);
-    expect(vec.upserted[0].id).toBe(result.vectorId);
+    expect(vec.upserted[0].id).toBe(result.vectorIds[0]);
 
     const rows = await listCorrections(db.d1);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
-      id: result.correctionId,
-      vector_id: result.vectorId,
+      id: result.correctionIds[0],
+      vector_id: result.vectorIds[0],
       article_id: "art-1",
       change_summary: input.changeSummary,
       topic_tag: "verb-choice",
     });
+    // No structured breakdown was available, so the row stores null.
+    expect(rows[0].fix_categories).toBeNull();
   });
 
   it("tags the vector with its article so a match can be traced back", async () => {
@@ -48,21 +138,6 @@ describe("captureCorrection", () => {
     const vec = fakeVectorize();
     await captureCorrection(testEnv({ DB: db.d1, VECTORIZE: vec }), { ...input, topicTag: null });
     expect(vec.upserted[0].metadata).toEqual({ article_id: "art-1" });
-  });
-
-  it("stores the per-fix category breakdown as JSON, or null when there is none", async () => {
-    const vec = fakeVectorize();
-    const withFixes = {
-      ...input,
-      fixes: [{ category: "grammar-suffix" as const, detail: "Fixed subject agreement suffix" }],
-    };
-    await captureCorrection(testEnv({ DB: db.d1, VECTORIZE: vec }), withFixes);
-    const [row] = await listCorrections(db.d1);
-    expect(JSON.parse(row.fix_categories as string)).toEqual(withFixes.fixes);
-
-    await captureCorrection(testEnv({ DB: db.d1, VECTORIZE: fakeVectorize() }), input);
-    const rows = await listCorrections(db.d1);
-    expect(rows.find((r) => r.id !== row.id)?.fix_categories).toBeNull();
   });
 
   it("persists nothing at all when the embedding fails", async () => {
@@ -113,8 +188,8 @@ describe("captureCorrection", () => {
     const a = await captureCorrection(env, input);
     const b = await captureCorrection(env, input);
 
-    expect(a.correctionId).not.toBe(b.correctionId);
-    expect(a.vectorId).not.toBe(b.vectorId);
+    expect(a.correctionIds[0]).not.toBe(b.correctionIds[0]);
+    expect(a.vectorIds[0]).not.toBe(b.vectorIds[0]);
     expect(await countCorrections(db.d1)).toBe(2);
   });
 });

@@ -11,8 +11,16 @@ const input = {
 };
 
 const fixes = [
-  { category: "wording", detail: "Replaced literal verb with idiomatic one" },
-  { category: "grammar-suffix", detail: "Fixed subject agreement suffix" },
+  {
+    category: "wording",
+    detail: "Replaced literal verb with idiomatic one",
+    englishAnchor: "announcing a policy",
+  },
+  {
+    category: "grammar-suffix",
+    detail: "Fixed subject agreement suffix",
+    englishAnchor: "the minister",
+  },
 ];
 
 function reply(over: Record<string, unknown> = {}): string {
@@ -49,6 +57,23 @@ describe("compareTranslations", () => {
       fixes: [
         { category: "punctuation", detail: "Added missing question mark" },
         { category: "other", detail: "Something else" },
+      ],
+    });
+  });
+
+  it("defaults a missing or non-string englishAnchor to an empty string", async () => {
+    stubGemini([
+      reply({
+        fixes: [
+          { category: "wording", detail: "no anchor given" },
+          { category: "tone", detail: "bad anchor type", englishAnchor: 42 },
+        ],
+      }),
+    ]);
+    await expect(compareTranslations(testEnv(), input)).resolves.toMatchObject({
+      fixes: [
+        { category: "wording", detail: "no anchor given", englishAnchor: "" },
+        { category: "tone", detail: "bad anchor type", englishAnchor: "" },
       ],
     });
   });
