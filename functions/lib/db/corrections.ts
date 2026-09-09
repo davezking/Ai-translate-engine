@@ -1,21 +1,21 @@
 import type { CorrectionRow } from "./types";
 
-export async function insertCorrection(
-  d1: D1Database,
-  input: {
-    id: string;
-    articleId: string;
-    changeSummary: string;
-    topicTag: string | null;
-    fixCategories: string | null;
-    vectorId: string;
-    now: number;
-  },
-): Promise<void> {
-  await d1
-    .prepare(
-      "INSERT INTO corrections (id, article_id, change_summary, topic_tag, fix_categories, vector_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    )
+export interface CorrectionInsert {
+  id: string;
+  articleId: string;
+  changeSummary: string;
+  topicTag: string | null;
+  fixCategories: string | null;
+  vectorId: string;
+  now: number;
+}
+
+const INSERT_SQL =
+  "INSERT INTO corrections (id, article_id, change_summary, topic_tag, fix_categories, vector_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)";
+
+function bindInsert(d1: D1Database, input: CorrectionInsert): D1PreparedStatement {
+  return d1
+    .prepare(INSERT_SQL)
     .bind(
       input.id,
       input.articleId,
@@ -24,8 +24,22 @@ export async function insertCorrection(
       input.fixCategories,
       input.vectorId,
       input.now,
-    )
-    .run();
+    );
+}
+
+export async function insertCorrection(d1: D1Database, input: CorrectionInsert): Promise<void> {
+  await bindInsert(d1, input).run();
+}
+
+/**
+ * Inserts several correction rows in ONE D1 transaction (d1.batch): per-fix
+ * capture writes N rows for one finalize, and this keeps them all-or-nothing so
+ * the D1 side can never be left half-written relative to the Vectorize upsert
+ * (Hard rule 3). A no-op for an empty list.
+ */
+export async function insertCorrections(d1: D1Database, inputs: CorrectionInsert[]): Promise<void> {
+  if (inputs.length === 0) return;
+  await d1.batch(inputs.map((input) => bindInsert(d1, input)));
 }
 
 /**

@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Standing rules for every Claude Code session in this repo. Read this before touching code. Task-specific instructions live in the `phase-*-sprint-*-prompts.md` files; this file is the context that applies to *all* of them.
+Standing rules for every Claude Code session in this repo. Read this before touching code. Task-specific instructions live in the `phase-*-sprint-*-prompts.md` files; this file is the context that applies to _all_ of them.
 
 ## What this project is
 
@@ -18,16 +18,16 @@ If a task seems to need a different service (a second DB, a different vector sto
 
 ## Hard rules
 
-1. **Secrets are server-side only.** The Gemini API key is a Worker secret. It, D1, Vectorize, and Workers AI are reachable *only* from server routes via bindings — never from the browser, never in client bundles. Every Gemini call originates server-side.
+1. **Secrets are server-side only.** The Gemini API key is a Worker secret. It, D1, Vectorize, and Workers AI are reachable _only_ from server routes via bindings — never from the browser, never in client bundles. Every Gemini call originates server-side.
 2. **Workers runtime, not Node.** Prefer Web-standard APIs and Cloudflare bindings. Don't reach for Node-only libraries; if one seems necessary, flag it instead of shimming around it.
-3. **D1 ↔ Vectorize must stay consistent.** A `corrections` row claims a vector via `vector_id`; a Vectorize vector must have a matching row. Never create one without the other — on failure, reconcile or mark pending. No orphans in either direction.
+3. **D1 ↔ Vectorize must stay consistent.** A `corrections` row claims a vector via `vector_id`; a Vectorize vector must have a matching row. Never create one without the other — on failure, reconcile or mark pending. No orphans in either direction. Per-fix capture writes a _set_ of rows+vectors per finalize: it upserts all vectors, then inserts all rows in one D1 `batch()`, and deletes every upserted vector if that batch fails — keep this all-or-nothing property (and the rollback) intact for any change to the set.
 4. **Respect free-tier write limits.** Autosave is debounced, minutes-order, and skips unchanged writes. Don't add per-keystroke or per-second writes anywhere.
 5. **Never lose reviewer work.** Edits are buffered locally (survives crash/disconnect/offline) and restored on reload. Don't weaken this guarantee for convenience.
 6. **Prompt history is immutable.** Publishing a prompt inserts a new `promptVersions` row and repoints `prompts.current_version_id`. Never overwrite or delete a version. Rollback = repoint only.
 7. **Input is pasted plain text only.** No file upload, no `.docx`/`.txt`, no Google Docs API. Don't add upload handling.
 8. **Admin-gated routes stay gated.** Prompt engine and style management require `role = 'admin'` (via `requireAdmin`), on top of Access.
 9. **Gemini calls are resilient by design.** `functions/lib/gemini.ts` walks a model chain — `gemini-3.6-flash` → `gemini-3.5-flash-lite` → `gemini-3.1-flash-lite` — on transient failures (429/5xx, including the "high demand" 503) or a 404 (model ID not valid for this API). Every model but the last gets one attempt before advancing; the last gets the full retry-with-backoff budget (4 attempts). A 404 advancing the chain (rather than failing outright) is deliberate: `gemini-3.6-flash-lite`, an earlier fallback guess, turned out not to exist for this API (confirmed via a live 404), so a wrong ID degrades to "skip that tier" instead of breaking resilience. The two lite fallback IDs are user-provided, not yet confirmed against a live `ListModels` call — if you add or change a model in the chain, confirm its exact ID that way first rather than guessing again.
-10. **A truncated Gemini response is a failure, never a result.** `generateText()` checks each candidate's `finishReason`; `MAX_TOKENS` (the response was cut off mid-output — more likely on long articles, since Amharic/Ge'ez costs more output tokens per word than English) throws immediately instead of returning the partial text. This is deliberately *not* an `AdvanceableGeminiError` — a smaller fallback model has an equal or smaller output budget, so advancing the chain wouldn't help and could make it worse. Every caller (QA, translate, compare) already treats a `generateText` throw as "leave the existing draft/state untouched, report the failure" — never weaken that by swallowing a truncation or saving partial output as if it were complete.
+10. **A truncated Gemini response is a failure, never a result.** `generateText()` checks each candidate's `finishReason`; `MAX_TOKENS` (the response was cut off mid-output — more likely on long articles, since Amharic/Ge'ez costs more output tokens per word than English) throws immediately instead of returning the partial text. This is deliberately _not_ an `AdvanceableGeminiError` — a smaller fallback model has an equal or smaller output budget, so advancing the chain wouldn't help and could make it worse. Every caller (QA, translate, compare) already treats a `generateText` throw as "leave the existing draft/state untouched, report the failure" — never weaken that by swallowing a truncation or saving partial output as if it were complete.
 
 ## Amharic / Ge'ez
 
@@ -36,7 +36,9 @@ If a task seems to need a different service (a second DB, a different vector sto
 
 ## Pipeline order (canonical)
 
-`ingest → split (editable) → translate per-chunk (retryable) → reassemble → QA (tone + retrieved lessons) → human review (autosave) → finalize → compare → store correction + embed`
+`ingest → split (editable) → translate per-chunk (retryable) → reassemble → QA (tone + retrieved lessons) → human review (autosave) → finalize → compare → store one correction per fix + embed each`
+
+- **Capture is per-fix (Sprint 5.2).** Compare returns a per-fix breakdown (`FixDetail[]`, each with `category`, `detail`, and an English `englishAnchor`); `captureCorrection` stores **one `corrections` row + one Vectorize vector per fix**, embedding each English-first on its anchor so per-chunk English retrieval matches sharp, single-topic lessons instead of one blurry article summary. If compare reports fixes but omits the breakdown, it falls back to a single whole-article lesson — never lose the lesson. All of a finalize's lessons embed in one `embedTexts` call, upsert in one Vectorize call, and insert in one D1 `batch()`, with full vector rollback on D1 failure.
 
 - One chunk failing must never fail the article; chunks retry individually.
 - Don't re-translate an unchanged chunk that already has Amharic text (hash the source to detect change).

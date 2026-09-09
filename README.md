@@ -142,7 +142,10 @@ your app.
    wired; Ge'ez should render correctly in the editor, with no mojibake.
 5. **Finalize one article.** This exercises the compare and the D1 + Vectorize
    write together. Afterwards the article should carry a `fix_count`, and
-   `correction_status` should read `captured` rather than `pending`.
+   `correction_status` should read `captured` rather than `pending`. Capture is
+   per-fix: an article with N fixes writes N `corrections` rows and N vectors
+   (one sharp lesson each), or a single whole-article row when compare omits the
+   per-fix breakdown.
 
 ### 6. Seed the correction library
 

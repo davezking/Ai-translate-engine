@@ -5,7 +5,7 @@ import { compareTranslations, type CompareInput } from "./compare";
 import { captureCorrection } from "./capture";
 
 export type CaptureOutcome =
-  | { status: "captured"; fixCount: number; correctionId: string; vectorId: string }
+  | { status: "captured"; fixCount: number; correctionIds: string[]; vectorIds: string[] }
   | { status: "skipped"; fixCount: number }
   | { status: "pending"; error: unknown };
 

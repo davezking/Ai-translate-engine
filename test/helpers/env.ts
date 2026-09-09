@@ -38,11 +38,16 @@ export function fakeVectorize(): FakeVectorize {
   return v;
 }
 
-/** Workers AI stub returning a vector of `dimensions` length (default: the real one). */
+/**
+ * Workers AI stub returning a vector of `dimensions` length (default: the real
+ * one) per input text — one vector for a string input, N for a string[] input —
+ * so both embedText and embedTexts (batch) are modelled faithfully.
+ */
 export function fakeAi(dimensions: number = EMBEDDING_DIMENSIONS) {
   return {
-    async run() {
-      return { data: [new Array(dimensions).fill(0.01)] };
+    async run(_model: string, opts?: { text?: string | string[] }) {
+      const count = Array.isArray(opts?.text) ? opts?.text.length : 1;
+      return { data: Array.from({ length: count }, () => new Array(dimensions).fill(0.01)) };
     },
   };
 }

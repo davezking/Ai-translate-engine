@@ -15,12 +15,7 @@ export interface CompareInput {
 
 /** Linguistic category for one fix — see FIX CATEGORIES in the prompt below. */
 export type FixCategory =
-  | "punctuation"
-  | "grammar-suffix"
-  | "wording"
-  | "tone"
-  | "clause"
-  | "other";
+  "punctuation" | "grammar-suffix" | "wording" | "tone" | "clause" | "other";
 
 const FIX_CATEGORIES: readonly FixCategory[] = [
   "punctuation",
@@ -35,6 +30,14 @@ export interface FixDetail {
   category: FixCategory;
   /** One short phrase naming the specific change (e.g. "verb suffix -ኧል -> -ኡ agreement"). */
   detail: string;
+  /**
+   * A short ENGLISH phrase naming the source concept/span this fix concerns
+   * (e.g. "greeting an elder", "quarterly earnings"). Per-fix capture embeds
+   * this so each lesson's vector lands near where a future English chunk query
+   * would — the enrichment that makes granular retrieval work. Best-effort:
+   * "" when the model omits it (capture then falls back to the detail text).
+   */
+  englishAnchor: string;
 }
 
 export interface CompareResult {
@@ -103,18 +106,25 @@ FIX CATEGORIES — tag EACH fix in "fixes" with exactly one of:
 - "clause": a clause, phrase, or sentence added or removed to fix meaning or completeness.
 - "other": a real fix that doesn't cleanly fit the above.
 
+For EACH fix also give an "englishAnchor": a short ENGLISH phrase (2-6 words) naming
+the concept or span in the ENGLISH SOURCE that this fix relates to — e.g. "greeting an
+elder", "the quarterly earnings figure", "the minister's title". This is used to find
+the lesson again when translating similar English later, so describe the SUBJECT in
+English, never the Ge'ez words themselves.
+
 Respond with ONLY this JSON object and no other text:
 {
   "changeSummary": "1-4 sentences: what changed, why it was changed, and what to watch for next time",
   "fixCount": 0,
   "topicTag": "short-lowercase-kebab-case-category",
   "fixes": [
-    {"category": "grammar-suffix", "detail": "short phrase naming this one specific fix"}
+    {"category": "grammar-suffix", "detail": "short phrase naming this one specific fix", "englishAnchor": "english subject this fix concerns"}
   ]
 }
 The "fixes" array must have exactly fixCount entries (empty array when fixCount is 0),
 one per distinct fix as counted above, each "detail" a short phrase (under 15 words)
-naming that specific change — not a restatement of changeSummary.`;
+naming that specific change — not a restatement of changeSummary — and each
+"englishAnchor" a short English phrase naming the source subject it applies to.`;
 
 function buildUserContent(input: CompareInput): string {
   return [
@@ -154,7 +164,8 @@ function coerceFixes(value: unknown): FixDetail[] {
     const category = (FIX_CATEGORIES as readonly string[]).includes(categoryRaw)
       ? (categoryRaw as FixCategory)
       : "other";
-    fixes.push({ category, detail });
+    const englishAnchor = typeof entry.englishAnchor === "string" ? entry.englishAnchor.trim() : "";
+    fixes.push({ category, detail, englishAnchor });
   }
   return fixes;
 }
