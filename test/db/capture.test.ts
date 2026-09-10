@@ -30,11 +30,15 @@ const twoFixes = {
       category: "wording" as const,
       detail: "Replaced literal verb with idiomatic one",
       englishAnchor: "announcing a policy",
+      before: "አስታወቁ",
+      after: "ይፋ አደረጉ",
     },
     {
-      category: "grammar-suffix" as const,
-      detail: "Fixed subject agreement suffix",
-      englishAnchor: "the minister",
+      category: "clause" as const,
+      detail: "Removed an invented proverb",
+      englishAnchor: "social media speculation",
+      before: "የተጋረጡ ጥላዎችን",
+      after: "",
     },
   ],
 };
@@ -59,11 +63,40 @@ describe("captureCorrection — per-fix", () => {
     const rows = await listCorrections(db.d1);
 
     const wording = rows.find((r) => r.change_summary.includes("idiomatic"));
+    // Lesson text folds in the concrete Ge'ez before→after example.
     expect(wording?.change_summary).toBe(
-      'When translating about "announcing a policy": Replaced literal verb with idiomatic one',
+      "When translating about \"announcing a policy\": Replaced literal verb with idiomatic one (e.g. 'አስታወቁ' → 'ይፋ አደረጉ')",
     );
     // fix_categories on each row is that ONE fix, wrapped as a FixDetail[].
     expect(JSON.parse(wording?.fix_categories as string)).toEqual([twoFixes.fixes[0]]);
+  });
+
+  it("formats a pure removal as (removed: …) with the Ge'ez span", async () => {
+    await captureCorrection(testEnv({ DB: db.d1, VECTORIZE: fakeVectorize() }), twoFixes);
+    const rows = await listCorrections(db.d1);
+
+    const clause = rows.find((r) => r.change_summary.includes("proverb"));
+    expect(clause?.change_summary).toBe(
+      "When translating about \"social media speculation\": Removed an invented proverb (removed: 'የተጋረጡ ጥላዎችን')",
+    );
+  });
+
+  it("keeps the embedded text English-only — the Ge'ez example never reaches the vector", async () => {
+    let embedded: string[] = [];
+    const ai = {
+      async run(_model: string, opts: { text?: string | string[] }) {
+        embedded = Array.isArray(opts.text) ? opts.text : [opts.text as string];
+        return { data: embedded.map(() => new Array(768).fill(0.01)) };
+      },
+    };
+    await captureCorrection(testEnv({ DB: db.d1, VECTORIZE: fakeVectorize(), AI: ai }), twoFixes);
+
+    // The anchor + English detail are embedded; no Ge'ez (U+1200–U+137F) leaks in.
+    expect(embedded).toEqual([
+      "announcing a policy. Replaced literal verb with idiomatic one",
+      "social media speculation. Removed an invented proverb",
+    ]);
+    for (const t of embedded) expect(t).not.toMatch(/[ሀ-፿]/);
   });
 
   it("embeds every fix in a single Workers AI call", async () => {

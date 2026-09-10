@@ -38,6 +38,23 @@ export interface FixDetail {
    * "" when the model omits it (capture then falls back to the detail text).
    */
   englishAnchor: string;
+  /**
+   * The exact Ge'ez span the reviewer changed or removed, quoted verbatim from
+   * the MACHINE Amharic ("" for a pure addition). Paired with `after`, this is
+   * the concrete before→after example woven into the stored lesson QA reads —
+   * far more useful than an abstract English description. NOT embedded (the
+   * embedding stays English via `englishAnchor`), so it enriches the lesson
+   * without polluting retrieval. Best-effort: "" when the model omits it or
+   * cannot quote it exactly. This is a reported span, not a character diff
+   * (Ge'ez must never be diffed byte-by-byte).
+   */
+  before: string;
+  /**
+   * The exact Ge'ez span the reviewer put in place of `before`, quoted verbatim
+   * from the HUMAN-FINAL Amharic ("" for a pure removal). Same best-effort,
+   * not-embedded, not-a-diff contract as `before`.
+   */
+  after: string;
 }
 
 export interface CompareResult {
@@ -112,19 +129,32 @@ elder", "the quarterly earnings figure", "the minister's title". This is used to
 the lesson again when translating similar English later, so describe the SUBJECT in
 English, never the Ge'ez words themselves.
 
+For EACH fix also give "before" and "after": the actual Ge'ez (Amharic) text of the
+change, as a concrete example.
+- "before": the exact span from the MACHINE Amharic that the reviewer changed or
+  removed. Quote it VERBATIM — copy the characters exactly as they appear in the MACHINE
+  text above. Use "" if the fix only ADDED text (nothing was there before).
+- "after": the exact span from the HUMAN-FINAL Amharic that replaced it. Quote it
+  VERBATIM from the HUMAN-FINAL text above. Use "" if the fix only REMOVED text.
+Keep each to the short span that actually changed, not the whole sentence. If you cannot
+quote a span exactly from the given text, use "" rather than paraphrasing or inventing
+Ge'ez — a wrong example is worse than none. Do NOT compare character-by-character to
+find these; report the spans of the change you already identified.
+
 Respond with ONLY this JSON object and no other text:
 {
   "changeSummary": "1-4 sentences: what changed, why it was changed, and what to watch for next time",
   "fixCount": 0,
   "topicTag": "short-lowercase-kebab-case-category",
   "fixes": [
-    {"category": "grammar-suffix", "detail": "short phrase naming this one specific fix", "englishAnchor": "english subject this fix concerns"}
+    {"category": "grammar-suffix", "detail": "short phrase naming this one specific fix", "englishAnchor": "english subject this fix concerns", "before": "የሚያስጠይቅ", "after": "የሚጠይቅ"}
   ]
 }
 The "fixes" array must have exactly fixCount entries (empty array when fixCount is 0),
 one per distinct fix as counted above, each "detail" a short phrase (under 15 words)
-naming that specific change — not a restatement of changeSummary — and each
-"englishAnchor" a short English phrase naming the source subject it applies to.`;
+naming that specific change — not a restatement of changeSummary — each "englishAnchor"
+a short English phrase naming the source subject it applies to, and "before"/"after" the
+verbatim Ge'ez spans of the change (either may be "" for a pure add or pure removal).`;
 
 function buildUserContent(input: CompareInput): string {
   return [
@@ -165,7 +195,9 @@ function coerceFixes(value: unknown): FixDetail[] {
       ? (categoryRaw as FixCategory)
       : "other";
     const englishAnchor = typeof entry.englishAnchor === "string" ? entry.englishAnchor.trim() : "";
-    fixes.push({ category, detail, englishAnchor });
+    const before = typeof entry.before === "string" ? entry.before.trim() : "";
+    const after = typeof entry.after === "string" ? entry.after.trim() : "";
+    fixes.push({ category, detail, englishAnchor, before, after });
   }
   return fixes;
 }
