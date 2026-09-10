@@ -15,11 +15,15 @@ const fixes = [
     category: "wording",
     detail: "Replaced literal verb with idiomatic one",
     englishAnchor: "announcing a policy",
+    before: "አስታወቁ",
+    after: "ይፋ አደረጉ",
   },
   {
     category: "grammar-suffix",
     detail: "Fixed subject agreement suffix",
     englishAnchor: "the minister",
+    before: "",
+    after: "",
   },
 ];
 
@@ -57,6 +61,44 @@ describe("compareTranslations", () => {
       fixes: [
         { category: "punctuation", detail: "Added missing question mark" },
         { category: "other", detail: "Something else" },
+      ],
+    });
+  });
+
+  it("captures the verbatim Ge'ez before/after spans of each fix", async () => {
+    stubGemini([
+      reply({
+        fixes: [
+          {
+            category: "grammar-suffix",
+            detail: "verb suffix agreement",
+            englishAnchor: "the minister",
+            before: "አስታወቁ",
+            after: "ይፋ አደረጉ",
+          },
+        ],
+      }),
+    ]);
+    await expect(compareTranslations(testEnv(), input)).resolves.toMatchObject({
+      fixes: [{ before: "አስታወቁ", after: "ይፋ አደረጉ" }],
+    });
+  });
+
+  it("defaults a missing or non-string before/after to an empty string", async () => {
+    stubGemini([
+      reply({
+        fixes: [
+          { category: "clause", detail: "removed invented proverb", before: "የተጋረጡ ጥላዎችን" },
+          { category: "wording", detail: "no spans given" },
+          { category: "tone", detail: "bad span types", before: 1, after: {} },
+        ],
+      }),
+    ]);
+    await expect(compareTranslations(testEnv(), input)).resolves.toMatchObject({
+      fixes: [
+        { detail: "removed invented proverb", before: "የተጋረጡ ጥላዎችን", after: "" },
+        { detail: "no spans given", before: "", after: "" },
+        { detail: "bad span types", before: "", after: "" },
       ],
     });
   });

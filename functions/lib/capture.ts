@@ -49,15 +49,36 @@ function planLessons(input: CaptureInput): PlannedLesson[] {
   return input.fixes.map((fix) => {
     const anchor = fix.englishAnchor.trim();
     return {
-      // Anchor first so the English subject dominates the embedding; the detail
-      // (which may contain Ge'ez) adds specificity without displacing it.
+      // Anchor first so the English subject dominates the EMBEDDING; the detail
+      // (which may contain Ge'ez) adds specificity without displacing it. The
+      // Ge'ez before/after example is deliberately NOT embedded — bge-base-en is
+      // an English model, so Ge'ez tokens would only blur the vector; it enriches
+      // the stored/QA-facing lesson instead (see renderFixLesson).
       embed: anchor ? `${anchor}. ${fix.detail}` : fix.detail,
-      changeSummary: anchor ? `When translating about "${anchor}": ${fix.detail}` : fix.detail,
+      changeSummary: renderFixLesson(fix, anchor),
       // Store just THIS fix's breakdown on its own row (a single-element array),
       // so the /corrections view and any consumer still reads a FixDetail[].
       fixCategories: JSON.stringify([fix] satisfies FixDetail[]),
     };
   });
+}
+
+/**
+ * The lesson text stored in change_summary and injected into the QA prompt. When
+ * the compare reported the actual Ge'ez spans, it appends the concrete before→after
+ * example — a machine-invented proverb removed, a verb suffix corrected — which is
+ * far more actionable for QA than an abstract English description alone. Falls back
+ * cleanly to just the description when a span is missing (best-effort metadata).
+ */
+function renderFixLesson(fix: FixDetail, anchor: string): string {
+  const base = anchor ? `When translating about "${anchor}": ${fix.detail}` : fix.detail;
+  const before = fix.before.trim();
+  const after = fix.after.trim();
+  let example = "";
+  if (before && after) example = ` (e.g. '${before}' → '${after}')`;
+  else if (before) example = ` (removed: '${before}')`;
+  else if (after) example = ` (added: '${after}')`;
+  return `${base}${example}`;
 }
 
 /**
