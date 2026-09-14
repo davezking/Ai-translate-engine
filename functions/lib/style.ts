@@ -27,8 +27,18 @@ Be specific and actionable, not vague adjectives. Instead of "engaging tone", sa
 something like "opens paragraphs with a short rhetorical question, then answers it
 in 2-3 short sentences before elaborating."
 
-Return ONLY the guidelines as plain text (a short list of concrete points), with no
-preamble, no restatement of the samples, and no markdown formatting.`;
+When you are given several samples, weight what is CONSISTENT across them — a habit
+that recurs in multiple samples is a stronger style signal than something that
+appears once. Note where the writer varies by topic or register only if that
+variation is itself consistent.
+
+Do NOT compress or summarize your findings just because the samples are long. A
+longer or richer set of samples should yield MORE concrete points, not fewer. Aim
+for at least 6-10 distinct, specific points whenever the samples support them; only
+return fewer if the samples genuinely show less.
+
+Return ONLY the guidelines as plain text (a list of concrete points, one per line),
+with no preamble, no restatement of the samples, and no markdown formatting.`;
 
 function buildUserContent(sampleArticles: string[]): string {
   return sampleArticles
