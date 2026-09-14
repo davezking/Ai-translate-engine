@@ -191,6 +191,18 @@ export default function StylesAdmin() {
               />
             </div>
 
+            <p className="hint banner" style={{ lineHeight: 1.6 }}>
+              <Icon name="info" />
+              <span>
+                For a truer style, split the writer's work into several separate
+                samples (each a complete short piece, ~500–800 words) rather than one long
+                block — long single samples tend to produce vaguer guidelines. Vary the
+                topic and register across samples (e.g. a news piece, an opinion piece, one
+                with quotes) so distinctive habits show up. If a writer writes very
+                differently across genres, make a separate profile per genre.
+              </span>
+            </p>
+
             {samples.map((sample, i) => (
               <div className="field" key={i}>
                 <div className="row">
