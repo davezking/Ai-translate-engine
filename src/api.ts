@@ -63,6 +63,21 @@ export function getArticle(id: string): Promise<{ article: ArticleDTO }> {
   return fetch(`/api/articles/${id}`).then((res) => asJson(res));
 }
 
+export interface FinalizedArticleDTO {
+  id: string;
+  sourcePreview: string;
+  fixCount: number | null;
+  correctionStatus: string | null;
+  source: string | null;
+  createdAt: number;
+  finalizedAt: number;
+}
+
+/** Finalized articles for the history view, newest finalize first. */
+export function listArticles(): Promise<{ articles: FinalizedArticleDTO[] }> {
+  return fetch("/api/articles").then((res) => asJson(res));
+}
+
 export function listChunks(articleId: string): Promise<{ chunks: ChunkDTO[] }> {
   return fetch(`/api/articles/${articleId}/chunks`).then((res) => asJson(res));
 }

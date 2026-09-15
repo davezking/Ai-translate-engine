@@ -166,6 +166,33 @@ export async function listFinalizedArticleFixCounts(
   return results;
 }
 
+export interface FinalizedArticleListRow {
+  id: string;
+  /** First ~120 chars of the pasted English, for a human-readable list label (IDs are UUIDs). */
+  source_preview: string;
+  fix_count: number | null;
+  correction_status: string | null;
+  source: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+/**
+ * Finalized articles for the history/list view (GET /api/articles), newest
+ * finalize first. updated_at lands at finalize time (see
+ * listFinalizedArticleFixCounts). Cheap: one indexed-order SELECT; only a
+ * source preview is returned, never the full article text, to keep the
+ * payload small — the workspace loads the full article by id on open.
+ */
+export async function listFinalizedArticles(d1: D1Database): Promise<FinalizedArticleListRow[]> {
+  const { results } = await d1
+    .prepare(
+      "SELECT id, substr(source_english, 1, 120) AS source_preview, fix_count, correction_status, source, created_at, updated_at FROM articles WHERE status = 'final' ORDER BY updated_at DESC",
+    )
+    .all<FinalizedArticleListRow>();
+  return results;
+}
+
 /**
  * Seed intake (POST /api/seed): inserts an already-finalized article in one
  * shot from an (English, AI-translation, human-final) triple, tagged
