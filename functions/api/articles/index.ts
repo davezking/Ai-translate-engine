@@ -1,8 +1,26 @@
 import type { Env } from "../../lib/env";
 import { db } from "../../lib/env";
-import { createArticle } from "../../lib/db/articles";
+import { createArticle, listFinalizedArticles } from "../../lib/db/articles";
 import { enforceMaxLength, MAX_ARTICLE_CHARS } from "../../lib/limits";
 import type { AuthedData } from "../_middleware";
+
+/**
+ * GET /api/articles: finalized articles for the history view, newest finalize
+ * first. Read-only; returns a source preview per article, not full text.
+ */
+export const onRequestGet: PagesFunction<Env, string, AuthedData> = async (context) => {
+  const rows = await listFinalizedArticles(db(context.env));
+  const articles = rows.map((r) => ({
+    id: r.id,
+    sourcePreview: r.source_preview,
+    fixCount: r.fix_count,
+    correctionStatus: r.correction_status,
+    source: r.source,
+    createdAt: r.created_at,
+    finalizedAt: r.updated_at,
+  }));
+  return Response.json({ articles });
+};
 
 /** Paste-text ingestion: stores the pasted English and hands back the new article's id. */
 export const onRequestPost: PagesFunction<Env, string, AuthedData> = async (context) => {

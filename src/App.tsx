@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Icon from "./Icon";
+import HistoryView from "./HistoryView";
 import Login from "./Login";
 import MetricsView from "./MetricsView";
 import PasteForm from "./PasteForm";
@@ -23,6 +24,10 @@ function isMetricsRoute(): boolean {
   return window.location.hash === "#/metrics";
 }
 
+function isHistoryRoute(): boolean {
+  return window.location.hash === "#/history";
+}
+
 function isStylesRoute(): boolean {
   return window.location.hash === "#/styles";
 }
@@ -35,6 +40,7 @@ export default function App() {
   const [articleId, setArticleId] = useState<string | null>(() => getArticleIdFromHash());
   const [onSeedRoute, setOnSeedRoute] = useState(() => isSeedRoute());
   const [onMetricsRoute, setOnMetricsRoute] = useState(() => isMetricsRoute());
+  const [onHistoryRoute, setOnHistoryRoute] = useState(() => isHistoryRoute());
   const [onStylesRoute, setOnStylesRoute] = useState(() => isStylesRoute());
   const [onPromptsRoute, setOnPromptsRoute] = useState(() => isPromptsRoute());
   const [isAdmin, setIsAdmin] = useState(false);
@@ -45,6 +51,7 @@ export default function App() {
       setArticleId(getArticleIdFromHash());
       setOnSeedRoute(isSeedRoute());
       setOnMetricsRoute(isMetricsRoute());
+      setOnHistoryRoute(isHistoryRoute());
       setOnStylesRoute(isStylesRoute());
       setOnPromptsRoute(isPromptsRoute());
     };
@@ -72,6 +79,11 @@ export default function App() {
   function handleCreated(id: string) {
     window.location.hash = `#/articles/${id}`;
     setArticleId(id);
+    setOnSeedRoute(false);
+    setOnMetricsRoute(false);
+    setOnHistoryRoute(false);
+    setOnStylesRoute(false);
+    setOnPromptsRoute(false);
   }
 
   function handleBack() {
@@ -79,8 +91,14 @@ export default function App() {
     setArticleId(null);
     setOnSeedRoute(false);
     setOnMetricsRoute(false);
+    setOnHistoryRoute(false);
     setOnStylesRoute(false);
     setOnPromptsRoute(false);
+  }
+
+  function handleHistoryNav() {
+    window.location.hash = "#/history";
+    setOnHistoryRoute(true);
   }
 
   function handleSeedNav() {
@@ -125,6 +143,11 @@ export default function App() {
         <button className="btn btn-primary" style={{ width: "100%" }} onClick={handleBack}>
           <Icon name="plus" />
           New article
+        </button>
+
+        <button className="btn" style={{ width: "100%", marginTop: 8 }} onClick={handleHistoryNav}>
+          <Icon name="doc" />
+          History
         </button>
 
         <button className="btn" style={{ width: "100%", marginTop: 8 }} onClick={handleMetricsNav}>
@@ -176,21 +199,25 @@ export default function App() {
             <b>
               {onSeedRoute
                 ? "Seed intake"
-                : onMetricsRoute
-                  ? "Fixes trend"
-                  : onStylesRoute
-                    ? "Writer styles"
-                    : onPromptsRoute
-                      ? "Prompt engine"
-                      : articleId
-                        ? "Workspace"
-                        : "New article"}
+                : onHistoryRoute
+                  ? "History"
+                  : onMetricsRoute
+                    ? "Fixes trend"
+                    : onStylesRoute
+                      ? "Writer styles"
+                      : onPromptsRoute
+                        ? "Prompt engine"
+                        : articleId
+                          ? "Workspace"
+                          : "New article"}
             </b>
           </div>
         </header>
         <div className="scroll">
           {onSeedRoute ? (
             <SeedIntake />
+          ) : onHistoryRoute ? (
+            <HistoryView onOpen={handleCreated} />
           ) : onMetricsRoute ? (
             <MetricsView />
           ) : onStylesRoute ? (
